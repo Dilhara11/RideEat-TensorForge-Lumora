@@ -29,13 +29,11 @@ parameter_overrides = "EcrStackName=\"tensorforge-ecr\" RepositoryUrl=\"https://
 template_file = "api.yaml"
 stack_name = "tensorforge-api"
 region = "ap-south-1"
-AmiId = "ami-0cf36b0c962e50fd7"
-CloudFrontPrefixListId = "pl-9aa247f3"
 capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
 confirm_changeset = true
 fail_on_empty_changeset = false
-# README step 2 fills AmiId and CloudFrontPrefixListId, step 5 fills ImageTag; phase B fills CorsOrigins.
-parameter_overrides = "EcrStackName=\"tensorforge-ecr\" ImageTag=\"REPLACE_WITH_PUSHED_TAG\" ApiKeyParameterName=\"/tensorforge/api/api-key\" CorsOrigins=\"\" InstanceType=\"t4g.medium\" AmiId=\"REPLACE_WITH_AMI_ID\" CloudFrontPrefixListId=\"REPLACE_WITH_PREFIX_LIST_ID\""
+parameter_overrides = "EcrStackName=\"tensorforge-ecr\" ImageTag=\"20261009-1852-23bf8d5\" ApiKeyParameterName=\"/tensorforge/api/api-key\" CorsOrigins=\"\" InstanceType=\"t4g.medium\" AmiId=\"ami-0cf36b0c962e50fd7\" CloudFrontPrefixListId=\"pl-9aa247f3\""
+
 
 [client.deploy.parameters]
 template_file = "client.yaml"
