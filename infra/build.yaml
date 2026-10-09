@@ -1,0 +1,140 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  TensorForge 2.0 - image builds inside AWS (stack "build"). CodeBuild fetches one commit from GitHub (with the
+  Git LFS model), builds app/server/Dockerfile natively on x86_64 and on arm64 (Graviton), pushes
+  <tag>-amd64 / <tag>-arm64 to ECR, then joins them into one multi-arch <tag>. Driven by scripts/cloud-build.sh;
+  nothing large is uploaded from a laptop.
+
+Parameters:
+  EcrStackName:
+    Type: String
+    Default: tensorforge-ecr
+  RepositoryUrl:
+    Type: String
+    Default: https://github.com/Dilhara11/RideEat-TensorForge-Lumora.git
+    AllowedPattern: "^https://github\\.com/.+"
+  GitHubTokenSecretId:
+    Type: String
+    Default: tensorforge/github-token
+    Description: Secrets Manager secret with a GitHub classic PAT (scope repo; plus admin:repo_hook for Amplify)
+
+Resources:
+  BuildLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /tensorforge/codebuild
+      RetentionInDays: 14
+
+  BuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: codebuild.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: tensorforge-image-build
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !GetAtt BuildLogGroup.Arn
+              - Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:BatchGetImage
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+                  - ecr:PutImage
+                Resource: { "Fn::ImportValue": !Sub "${EcrStackName}-RepositoryArn" }
+              - Effect: Allow # Secrets Manager adds a random 6-character suffix to secret ARNs
+                Action: secretsmanager:GetSecretValue
+                Resource: !Sub "arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${GitHubTokenSecretId}-*"
+
+  ImageBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: tensorforge-api-image
+      Description: Build app/server/Dockerfile from a GitHub commit for one architecture, or join both into one tag
+      ServiceRole: !GetAtt BuildRole.Arn
+      TimeoutInMinutes: 60
+      Artifacts:
+        Type: NO_ARTIFACTS
+      # x86_64 by default; scripts/cloud-build.sh overrides type/image for the arm64 run.
+      Environment:
+        Type: LINUX_CONTAINER
+        Image: aws/codebuild/amazonlinux-x86_64-standard:5.0
+        ComputeType: BUILD_GENERAL1_MEDIUM
+        PrivilegedMode: true # Docker daemon inside the build
+        EnvironmentVariables:
+          - Name: ECR_REPO
+            Value: { "Fn::ImportValue": !Sub "${EcrStackName}-RepositoryUri" }
+          - Name: REPO_URL
+            Value: !Ref RepositoryUrl
+          - Name: GITHUB_TOKEN
+            Type: SECRETS_MANAGER # masked in build logs
+            Value: !Ref GitHubTokenSecretId
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Ref BuildLogGroup
+      Source:
+        Type: NO_SOURCE
+        # Per run (set by scripts/cloud-build.sh): STAGE=image|index, GIT_SHA=<full commit>, IMAGE_TAG=<tag>.
+        BuildSpec: |
+          version: 0.2
+          env:
+            shell: bash
+          phases:
+            build:
+              commands:
+                - |
+                  set -euo pipefail
+                  : "${STAGE:?}" "${GIT_SHA:?}" "${IMAGE_TAG:?}"
+                  aws ecr get-login-password | docker login --username AWS --password-stdin "${ECR_REPO%%/*}"
+                  if [ "$STAGE" = "index" ]; then
+                    # Join the two native images into one multi-arch tag (manifests only, no layer copies).
+                    docker buildx imagetools create -t "$ECR_REPO:$IMAGE_TAG" \
+                      "$ECR_REPO:$IMAGE_TAG-amd64" "$ECR_REPO:$IMAGE_TAG-arm64"
+                    docker buildx imagetools inspect "$ECR_REPO:$IMAGE_TAG"
+                  else
+                    ARCH=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
+                    # Exact commit + LFS objects. The token goes in a header for github.com only (never in a URL).
+                    mkdir -p "$CODEBUILD_SRC_DIR/src" && cd "$CODEBUILD_SRC_DIR/src"
+                    git init -q
+                    git remote add origin "$REPO_URL"
+                    git config http.https://github.com/.extraheader \
+                      "AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+                    git fetch -q --depth 1 origin "$GIT_SHA"
+                    git checkout -q FETCH_HEAD
+                    git lfs install --local
+                    git lfs pull
+                    SIZE=$(stat -c %s training/models/winner/model.onnx)
+                    echo "commit $(git rev-parse HEAD) | arch $ARCH | model.onnx $SIZE bytes"
+                    if [ "$SIZE" -lt 100000000 ]; then
+                      echo "model.onnx is a Git LFS pointer, not the model: the LFS object is not on GitHub" >&2
+                      exit 1
+                    fi
+                    # Official python image from the ECR Public mirror of Docker Hub's library (no Docker Hub
+                    # rate limits); tagged with the name the Dockerfile uses, so the Dockerfile stays unchanged.
+                    docker pull -q public.ecr.aws/docker/library/python:3.12-slim
+                    docker tag public.ecr.aws/docker/library/python:3.12-slim python:3.12-slim
+                    DOCKER_BUILDKIT=1 docker build --progress=plain -f app/server/Dockerfile \
+                      -t "$ECR_REPO:$IMAGE_TAG-$ARCH" .
+                    docker push "$ECR_REPO:$IMAGE_TAG-$ARCH"
+                  fi
+
+Outputs:
+  ProjectName:
+    Value: !Ref ImageBuildProject
+  LogGroupName:
+    Value: !Ref BuildLogGroup

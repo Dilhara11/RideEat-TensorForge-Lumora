@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  TensorForge 2.0 - web client (app/client) on AWS Amplify Hosting (stack 3 of 3).
+  Built by Amplify from GitHub with amplify.yml at the repo root; the API URL is baked in at build time.
+
+Parameters:
+  ApiStackName:
+    Type: String
+    Default: tensorforge-api
+    Description: Stack whose ApiUrl output becomes VITE_API_BASE_URL
+  RepositoryUrl:
+    Type: String
+    Default: https://github.com/Dilhara11/RideEat-TensorForge-Lumora
+    AllowedPattern: "^https://github\\.com/[^/]+/[^/]+$"
+  BranchName:
+    Type: String
+    Default: main
+    Description: Git branch Amplify builds and serves (must contain amplify.yml and app/client)
+  GitHubTokenSecretId:
+    Type: String
+    Default: tensorforge/github-token
+    Description: >
+      Secrets Manager secret holding a GitHub classic PAT (scope admin:repo_hook). Amplify uses it to set up the
+      Amplify GitHub App connection and does not store it.
+
+Resources:
+  ClientApp:
+    Type: AWS::Amplify::App
+    Properties:
+      Name: tensorforge-client
+      Description: TensorForge 2.0 support-ticket classifier - web client
+      Repository: !Ref RepositoryUrl
+      AccessToken: !Sub "{{resolve:secretsmanager:${GitHubTokenSecretId}:SecretString}}"
+      Platform: WEB
+      # No BuildSpec here: Amplify uses amplify.yml from the repo (Node 22, npm ci, npm test, npm run build, dist/).
+      EnvironmentVariables:
+        - Name: AMPLIFY_MONOREPO_APP_ROOT
+          Value: app/client
+        - Name: VITE_API_BASE_URL
+          Value: { "Fn::ImportValue": !Sub "${ApiStackName}-ApiUrl" }
+      CustomHeaders: |
+        customHeaders:
+          - pattern: '**'
+            headers:
+              - key: Strict-Transport-Security
+                value: max-age=31536000; includeSubDomains
+              - key: X-Content-Type-Options
+                value: nosniff
+              - key: X-Frame-Options
+                value: DENY
+              - key: Referrer-Policy
+                value: strict-origin-when-cross-origin
+
+  ClientBranch:
+    Type: AWS::Amplify::Branch
+    Properties:
+      AppId: !GetAtt ClientApp.AppId
+      BranchName: !Ref BranchName
+      Stage: PRODUCTION
+      Framework: React
+      EnableAutoBuild: true
+
+Outputs:
+  AppId:
+    Value: !GetAtt ClientApp.AppId
+  ClientUrl:
+    Description: Public site URL; also the exact value for the API's CorsOrigins
+    # Amplify turns "/" in branch names into "-" in the subdomain.
+    Value: !Sub
+      - "https://${Sub}.${ClientApp.DefaultDomain}"
+      - Sub: !Join ["-", !Split ["/", !Ref BranchName]]
