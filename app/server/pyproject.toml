@@ -1,0 +1,11 @@
+[project]
+name = "tfengine"
+version = "1.0.0"
+description = "TensorForge 2.0 API engine: FastAPI + ONNX Runtime ticket classifier with async batch jobs"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["model: end-to-end tests that need the real ONNX model bundle (auto-skipped if absent)"]
+filterwarnings = ["ignore::DeprecationWarning"]

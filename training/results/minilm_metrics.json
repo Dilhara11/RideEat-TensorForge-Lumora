@@ -1,0 +1,114 @@
+{
+  "model": "minilm",
+  "best_epoch": 5,
+  "train_config": {
+    "model_key": "minilm",
+    "learning_rate": 5e-05,
+    "batch_size": 16,
+    "max_length": 192,
+    "epochs": 5,
+    "warmup_ratio": 0.1,
+    "weight_decay": 0.01,
+    "loss_weights": [
+      1.0,
+      0.5,
+      0.3
+    ],
+    "dropout": 0.1,
+    "grad_clip": 1.0,
+    "fp16": true,
+    "seed": 42,
+    "eval_batch_size": 64
+  },
+  "dev": {
+    "n": 400,
+    "category_acc": 0.8075,
+    "category_macro_f1": 0.6286218172805794,
+    "category_weighted_f1": 0.7570719446609556,
+    "secondary_acc": 0.9275,
+    "secondary_precision": 1.0,
+    "secondary_recall": 0.06451612903225806,
+    "secondary_f1": 0.12121212121212122,
+    "urgency_acc": 0.885,
+    "urgency_precision": 0.0,
+    "urgency_recall": 0.0,
+    "urgency_f1": 0.0,
+    "exact_match": 0.68,
+    "ece": 0.29615435272303264,
+    "mean_confidence": 0.5113456472769673
+  },
+  "val": {
+    "n": 800,
+    "category_acc": 0.55125,
+    "category_macro_f1": 0.4225165121526899,
+    "category_weighted_f1": 0.5165788254453121,
+    "secondary_acc": 0.9175,
+    "secondary_precision": 1.0,
+    "secondary_recall": 0.175,
+    "secondary_f1": 0.2978723404255319,
+    "urgency_acc": 0.9,
+    "urgency_precision": 0.0,
+    "urgency_recall": 0.0,
+    "urgency_f1": 0.0,
+    "exact_match": 0.4675,
+    "ece": 0.11396314540186536,
+    "mean_confidence": 0.4646266623138112
+  },
+  "val_per_language": [
+    {
+      "language": "en",
+      "n": 280,
+      "category_acc": 0.48928571428571427,
+      "category_macro_f1": 0.37242295792608787,
+      "secondary_acc": 0.875,
+      "urgency_f1": 0.0,
+      "gap_vs_en": 0.0
+    },
+    {
+      "language": "singlish",
+      "n": 200,
+      "category_acc": 0.615,
+      "category_macro_f1": 0.46676776118356256,
+      "secondary_acc": 0.945,
+      "urgency_f1": 0.0,
+      "gap_vs_en": 0.12571428571428572
+    },
+    {
+      "language": "si",
+      "n": 160,
+      "category_acc": 0.53125,
+      "category_macro_f1": 0.3825565497871162,
+      "secondary_acc": 0.94375,
+      "urgency_f1": 0.0,
+      "gap_vs_en": 0.04196428571428573
+    },
+    {
+      "language": "ta",
+      "n": 120,
+      "category_acc": 0.6083333333333333,
+      "category_macro_f1": 0.39266990937181206,
+      "secondary_acc": 0.9416666666666667,
+      "urgency_f1": 0.0,
+      "gap_vs_en": 0.11904761904761901
+    },
+    {
+      "language": "mixed",
+      "n": 20,
+      "category_acc": 0.6,
+      "category_macro_f1": 0.4231601731601731,
+      "secondary_acc": 0.9,
+      "urgency_f1": 0.0,
+      "gap_vs_en": 0.11071428571428571
+    },
+    {
+      "language": "tanglish",
+      "n": 20,
+      "category_acc": 0.55,
+      "category_macro_f1": 0.5126262626262627,
+      "secondary_acc": 0.9,
+      "urgency_f1": 0.0,
+      "gap_vs_en": 0.060714285714285776
+    }
+  ],
+  "checkpoint_mb": 448.3538885116577
+}

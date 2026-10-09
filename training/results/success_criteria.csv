@@ -1,0 +1,13 @@
+criterion,value,pass
+Category F1 (macro) ≥ 0.85,0.8057046042940044,False
+"Secondary accuracy ≥ 0.80 (exact, incl. none)",0.9825,True
+"Secondary F1 on present labels (reported, see review)",0.9014084507042254,
+Urgency F1 (positive class) ≥ 0.90,0.9428571428571428,True
+Every language within 10 pt of English acc,-0.32978723404255317,False
+"CPU p95 < 800 ms (single ticket, 2 threads)",552.3199293003244,True
+"100-ticket batch < 30 s (target, not scored)",25.838755242999923,True
+Packaged model < 2 GB (MB),1075.0336303710938,True
+Business rules enforced (violations),0,True
+Deterministic outputs,True,True
+Batch-invariant (single == batched prediction),True,True
+Confidence calibrated: ECE (val_test),0.061532989560794435,False

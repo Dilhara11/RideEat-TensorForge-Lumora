@@ -1,0 +1,15 @@
+# Used automatically by BuildKit for `docker build -f app/server/Dockerfile .` (context = repo root).
+# Allow-list: send only what the image needs.
+*
+!app/server/requirements.txt
+!app/server/tfengine/
+!training/models/winner/model.onnx
+!training/models/winner/inference_config.json
+!training/models/winner/labels.json
+!training/models/winner/tokenizer/
+!app/frontend/
+
+# Never ship caches or Windows download markers.
+**/__pycache__
+**/*.pyc
+**/*:Zone.Identifier

@@ -1,0 +1,7 @@
+checkpoints/
+models/staging/
+data/processed/
+*.pt
+*.joblib
+__pycache__/
+.ipynb_checkpoints/

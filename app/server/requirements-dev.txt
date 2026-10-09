@@ -1,0 +1,8 @@
+-r requirements.txt
+pytest==9.1.1
+httpx==0.28.1
+jsonschema==4.26.0
+# Lets `uvicorn ... --env-file .env` read the .env file in a venv run (Docker reads it natively).
+python-dotenv==1.2.1
+# Optional: load tests (loadtest/locustfile.py). Large dependency tree, so not needed for pytest.
+# locust

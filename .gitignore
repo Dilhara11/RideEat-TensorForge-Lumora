@@ -1,0 +1,49 @@
+# TensorForge 2.0: what stays off the remote.
+# Note: gitignore has no inline comments, so every comment sits on its own line.
+
+# ---- Local reference material ---------------------------------------------------------
+# Organizer PDF, dataset and team planning notes: kept locally only.
+# The API contract the code needs is copied into app/server/contract/.
+/Resources/
+
+# ---- Secrets --------------------------------------------------------------------------
+# Real API key lives in .env; only the template is committed.
+.env
+.env.*
+!.env.example
+
+# ---- Python environments, caches, test output -----------------------------------------
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.ipynb_checkpoints/
+
+# ---- Runtime data ---------------------------------------------------------------------
+# SQLite job store created by local (venv) runs of the API; the container keeps it in /app/data.
+app/server/var/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+*.log
+
+# ---- Training artifacts ---------------------------------------------------------------
+# Competition dataset + processed splits: not redistributed (see training/README.md for where to put them).
+training/data/
+# Checkpoints (1+ GB each) and intermediate ONNX exports: reproducible from the notebooks, archived on Drive.
+training/checkpoints/
+training/models/staging/
+*.pt
+*.joblib
+# training/models/winner/ IS committed: the Docker image is built from it (model.onnx needs Git LFS).
+
+# ---- OS / editor noise ----------------------------------------------------------------
+# Windows "downloaded from the internet" markers created when copying files from Drive.
+*:Zone.Identifier
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/

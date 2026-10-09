@@ -1,0 +1,8 @@
+# Extras on top of the Colab image (torch, transformers, pandas, sklearn, matplotlib, seaborn are preinstalled).
+# Don't reinstall/pin torch on Colab: it breaks the CUDA build that ships with the runtime.
+onnx>=1.16
+onnxruntime>=1.18
+onnxscript>=0.1
+sentencepiece>=0.2
+protobuf>=4.25
+psutil

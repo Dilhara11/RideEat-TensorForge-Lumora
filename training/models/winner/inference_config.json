@@ -1,0 +1,26 @@
+{
+  "model_key": "xlmr-base",
+  "backbone": "FacebookAI/xlm-roberta-base",
+  "pooling": "cls",
+  "max_length": 192,
+  "input_format": "pair(header=f'{channel} {sep} {subject}' or channel, body=text), truncation=only_second, NFC + whitespace collapse",
+  "precision": "fp16-storage (fp32 compute)",
+  "decode": {
+    "temperature": 1.5954600883547825,
+    "urgency_threshold": 0.425,
+    "secondary_threshold": 0.4,
+    "review_threshold": 0.7
+  },
+  "calibration_fit": "val_cal (50% of validation)",
+  "version_prefix": "v1.2",
+  "inference_batch_size": 1,
+  "onnx_file": "model.onnx",
+  "model_sha256": "558395869056b603a4f824271a7ef36c69fe15949476628b2df454c713d01202",
+  "model_version": "v1.2-558395869056",
+  "compression": {
+    "method": "fp16 storage of float32 weights + Cast to float32 (tfml.compress.fp16_storage)",
+    "source_model_version": "v1.1-ff6ac27e5faa",
+    "source_fp32_sha256": "ff6ac27e5faa2a5c73614e12adaade6eb5298db4391d5d1d237e8c336010765d",
+    "notebook": "05_fp16_compression.ipynb"
+  }
+}
