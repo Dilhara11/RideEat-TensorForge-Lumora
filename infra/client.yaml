@@ -34,6 +34,28 @@ Resources:
       AccessToken: !Sub "{{resolve:secretsmanager:${GitHubTokenSecretId}:SecretString}}"
       Platform: WEB
       # No BuildSpec here: Amplify uses amplify.yml from the repo (Node 22, npm ci, npm test, npm run build, dist/).
+      BuildSpec: |
+        version: 1
+        applications:
+          - appRoot: app/client
+            frontend:
+              phases:
+                preBuild:
+                  commands:
+                    - nvm install 22 && nvm use 22
+                    - npm ci --no-audit --no-fund
+                build:
+                  commands:
+                    - npm test
+                    - npm run build
+              artifacts:
+                baseDirectory: dist
+                files:
+                  - "**/*"
+              cache:
+                paths:
+                  - node_modules/**/*
+
       EnvironmentVariables:
         - Name: AMPLIFY_MONOREPO_APP_ROOT
           Value: app/client
