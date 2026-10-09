@@ -3,6 +3,7 @@
 
 import { forwardRef, useEffect, useId, useImperativeHandle, useRef, useState, type FormEvent } from "react";
 import { ApiError, apiKey, unauthorizedEvents, verifyKey } from "../lib/api";
+import { Icon } from "./icons";
 import { Button, FieldError } from "./ui";
 
 export interface KeyDialogHandle {
@@ -60,12 +61,15 @@ export const KeyDialog = forwardRef<KeyDialogHandle>(function KeyDialog(_, ref) 
     <dialog
       ref={dialog}
       aria-labelledby="key-dialog-title"
-      className="m-auto w-[min(480px,calc(100vw-32px))] rounded-card border border-border bg-surface p-6 text-text shadow-xl"
+      className="m-auto w-[min(460px,calc(100vw-32px))] rounded-card border border-border bg-surface p-6 text-text shadow-pop"
     >
       <form onSubmit={submit} noValidate>
-        <h2 id="key-dialog-title" className="mb-2 text-lg font-semibold">API key</h2>
-        <p className="mb-4 text-sm text-muted">Classifying tickets needs the service API key. It stays in this browser and is only sent to this server.</p>
-        <label htmlFor="key-input" className="mb-1 block text-sm font-semibold">Key</label>
+        <span aria-hidden="true" className="mb-4 grid size-11 place-items-center rounded-xl bg-accent-soft text-accent">
+          <Icon name="key" size={20} />
+        </span>
+        <h2 id="key-dialog-title" className="mb-1.5 text-lg font-semibold">Connect with your API key</h2>
+        <p className="mb-5 text-sm text-muted">Classifying tickets needs the service API key. It stays in this browser and is only sent to this server.</p>
+        <label htmlFor="key-input" className="mb-1.5 block text-sm font-semibold">API key</label>
         <div className="flex gap-2">
           <input
             id="key-input"
@@ -82,12 +86,12 @@ export const KeyDialog = forwardRef<KeyDialogHandle>(function KeyDialog(_, ref) 
           <Button aria-pressed={reveal} onClick={() => setReveal((r) => !r)}>{reveal ? "Hide" : "Show"}</Button>
         </div>
         <FieldError id={errorId}>{error}</FieldError>
-        <label className="mt-3 flex min-h-8 cursor-pointer items-center gap-2">
+        <label className="mt-4 flex min-h-8 cursor-pointer items-center gap-2 text-sm font-medium">
           <input type="checkbox" className="size-4.5 accent-accent" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
           Remember on this device
         </label>
         <p className="mt-1 text-[13px] text-muted">If you don't tick this, the key is forgotten when you close the tab.</p>
-        <div className="mt-4 flex flex-wrap items-center gap-2">
+        <div className="mt-6 flex flex-wrap items-center gap-2">
           {hasKey && (
             <Button
               variant="danger-ghost"
@@ -101,7 +105,7 @@ export const KeyDialog = forwardRef<KeyDialogHandle>(function KeyDialog(_, ref) 
           )}
           <span className="flex-1" />
           <Button onClick={() => dialog.current?.close()}>Cancel</Button>
-          <Button type="submit" variant="primary" busy={checking} busyLabel="Checking…">Save</Button>
+          <Button type="submit" variant="primary" busy={checking} busyLabel="Checking…">Save key</Button>
         </div>
       </form>
     </dialog>

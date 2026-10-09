@@ -2,11 +2,14 @@
 // Every number shown is computed from the predictions actually returned. Nothing is invented.
 
 import { useId, useMemo, useState } from "react";
-import { Button, Card, Note, ReviewBadge, StatTile, UrgentBadge, cx } from "../../components/ui";
+import { Icon } from "../../components/icons";
+import { Button, Card, CardHead, Note, ReviewBadge, StatTile, UrgentBadge, cx } from "../../components/ui";
 import { toCsv } from "../../lib/csv";
 import { download, fmt } from "../../lib/format";
 import { CHANNEL_LABEL, RESULT_COLUMNS, TEAMS, categoryLabel, flattenResult } from "../../lib/tickets";
 import type { ResultItem } from "../../lib/types";
+import { RouteDialog } from "../routing/RouteDialog";
+import { CHANNEL_ICON, teamIcon } from "../routing/teams";
 
 const PAGE = 50;
 
@@ -24,6 +27,7 @@ export function ResultsView({ title, fileBase, items, processingMs, modelVersion
   const [urgentOnly, setUrgentOnly] = useState(false);
   const [reviewOnly, setReviewOnly] = useState(false);
   const [page, setPage] = useState(0);
+  const [routing, setRouting] = useState<ResultItem | null>(null);
   const teamSelectId = useId();
 
   const stats = useMemo(() => {
@@ -64,22 +68,26 @@ export function ResultsView({ title, fileBase, items, processingMs, modelVersion
   const { n } = stats;
   return (
     <section aria-label={title}>
-      <h2 className="mb-3 text-lg font-semibold">{title}</h2>
+      <div className="mb-4 flex items-center gap-2">
+        <span aria-hidden="true" className="grid size-7 place-items-center rounded-full bg-success-soft text-success">
+          <Icon name="check" size={15} />
+        </span>
+        <h2 className="text-lg font-semibold">{title}</h2>
+      </div>
       {note && <Note tone="info">{note}</Note>}
 
-      <div className="mb-6 grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3">
-        <StatTile label="Tickets classified" value={fmt.int(n)} />
-        <StatTile label="Urgent" icon="▲" value={fmt.int(stats.urgent)} sub={n ? `${fmt.pct(stats.urgent / n)} of tickets` : null} />
-        <StatTile label="Need human review" icon="●" value={fmt.int(stats.review)} sub={n ? `${fmt.pct(stats.review / n)} of tickets` : null} />
-        <StatTile label="Average confidence" value={fmt.pct(stats.avgConf)} />
-        {processingMs !== undefined && <StatTile label="Server time" value={fmt.ms(processingMs)} sub={modelVersion ? `model ${modelVersion}` : null} />}
+      <div className="mb-6 grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-3">
+        <StatTile label="Tickets classified" icon="inbox" value={fmt.int(n)} />
+        <StatTile label="Urgent" icon="zap" tone="urgent" value={fmt.int(stats.urgent)} sub={n ? `${fmt.pct(stats.urgent / n)} of tickets` : null} />
+        <StatTile label="Need human review" icon="userCheck" tone="review" value={fmt.int(stats.review)} sub={n ? `${fmt.pct(stats.review / n)} of tickets` : null} />
+        <StatTile label="Average confidence" icon="gauge" tone="ok" value={fmt.pct(stats.avgConf)} />
+        {processingMs !== undefined && <StatTile label="Server time" icon="clock" value={fmt.ms(processingMs)} sub={modelVersion ? `model ${modelVersion}` : null} />}
       </div>
 
       {/* Tickets per team: one series, one hue, value at the tip, rounded data-end, square at the baseline. */}
       <Card>
-        <h3 className="mb-1 font-semibold">Tickets per team</h3>
-        <p className="mb-3 text-sm text-muted">Click a team to filter the table below.</p>
-        <ul aria-label="Tickets per team">
+        <CardHead icon="route" title="Routing load by team" sub="Where these tickets were routed. Click a team to filter the table below." />
+        <ul aria-label="Tickets per team" className="space-y-0.5">
           {stats.teams.map(([t, count]) => {
             const active = team === t;
             return (
@@ -89,12 +97,18 @@ export function ResultsView({ title, fileBase, items, processingMs, modelVersion
                   aria-pressed={active}
                   title={`${t}: ${fmt.int(count)} tickets (${fmt.pct(count / n)}). Click to filter the table.`}
                   onClick={() => setFilter(() => setTeam(active ? "" : t))}
-                  className="group grid w-full cursor-pointer grid-cols-[110px_minmax(0,1fr)] items-center gap-3 rounded-md py-1.5 text-left sm:grid-cols-[190px_minmax(0,1fr)]"
+                  className={cx(
+                    "group grid w-full cursor-pointer grid-cols-[130px_minmax(0,1fr)] items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors sm:grid-cols-[220px_minmax(0,1fr)]",
+                    active ? "bg-accent-soft" : "hover:bg-surface-2",
+                  )}
                 >
-                  <span className={cx("truncate text-right text-sm", active ? "font-semibold text-text" : "text-text-2")}>{t}</span>
+                  <span className={cx("flex min-w-0 items-center gap-2 text-sm", active ? "font-semibold text-text" : "text-text-2")}>
+                    <Icon name={teamIcon(t)} size={15} className={active ? "text-accent" : "text-muted"} />
+                    <span className="truncate">{t}</span>
+                  </span>
                   <span className="flex min-w-0 items-center gap-2">
                     <span
-                      className={cx("h-3.5 min-w-0.5 rounded-r transition-colors", active ? "bg-accent-hover" : "bg-mark group-hover:bg-accent-hover")}
+                      className={cx("h-3.5 min-w-0.5 origin-left animate-grow-x rounded-r-[4px] transition-colors", active ? "bg-accent-hover" : "bg-mark group-hover:bg-accent-hover")}
                       style={{ width: `${(count / maxTeam) * 85}%` }}
                     />
                     <span className="whitespace-nowrap text-[13px] tabular-nums">
@@ -128,17 +142,25 @@ export function ResultsView({ title, fileBase, items, processingMs, modelVersion
             Needs review only
           </label>
           <span className="flex-1" />
-          <Button onClick={() => exportCsv(filtered)}>Download filtered CSV</Button>
-          <Button variant="primary" onClick={() => exportCsv(items)}>Download all (CSV)</Button>
+          <Button icon="download" onClick={() => exportCsv(filtered)}>Filtered CSV</Button>
+          <Button variant="primary" icon="download" onClick={() => exportCsv(items)}>Download all (CSV)</Button>
         </div>
 
-        <div className="overflow-x-auto rounded-md border border-border">
+        <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full border-collapse text-sm">
             <caption className="sr-only">Classification results for {title}</caption>
             <thead>
               <tr>
-                {["Ticket", "Channel", "Text", "Category", "Team", "Secondary", "Urgent", "Confidence", "Review"].map((c) => (
-                  <th key={c} scope="col" className={cx("sticky top-0 whitespace-nowrap border-b border-border bg-surface-2 px-3 py-2 text-left text-[13px] font-semibold text-text-2", c === "Confidence" && "text-right")}>
+                {["Ticket", "Channel", "Text", "Category", "Team", "Secondary", "Urgent", "Confidence", "Review", "Routing"].map((c) => (
+                  <th
+                    key={c}
+                    scope="col"
+                    className={cx(
+                      "sticky top-0 whitespace-nowrap border-b border-border bg-surface-2 px-3 py-2.5 text-left text-[11.5px] font-semibold uppercase tracking-[0.06em] text-muted",
+                      c === "Confidence" && "text-right",
+                      c === "Routing" && "right-0 z-[1] shadow-[-8px_0_12px_-10px_rgb(0_0_0/0.25)]",
+                    )}
+                  >
                     {c}
                   </th>
                 ))}
@@ -147,13 +169,24 @@ export function ResultsView({ title, fileBase, items, processingMs, modelVersion
             <tbody>
               {slice.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-3 py-3 text-muted">No tickets match these filters.</td>
+                  <td colSpan={10} className="px-3 py-6 text-center text-muted">No tickets match these filters.</td>
                 </tr>
               )}
-              {slice.map(({ row, ticket, prediction: p }, i) => (
-                <tr key={`${p.ticket_id ?? row ?? i}`} className="border-b border-border align-top last:border-b-0 hover:bg-surface-2">
+              {slice.map((item, i) => {
+                const { row, ticket, prediction: p } = item;
+                return (
+                <tr key={`${p.ticket_id ?? row ?? i}`} className="border-b border-border align-top transition-colors last:border-b-0 hover:bg-surface-2">
                   <td className="whitespace-nowrap px-3 py-2 font-mono text-[13px]">{p.ticket_id ?? (row ? `row ${row}` : "–")}</td>
-                  <td className="px-3 py-2">{ticket ? CHANNEL_LABEL[ticket.channel] : "–"}</td>
+                  <td className="px-3 py-2">
+                    {ticket ? (
+                      <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                        <Icon name={CHANNEL_ICON[ticket.channel]} size={14} className="text-muted" />
+                        {CHANNEL_LABEL[ticket.channel]}
+                      </span>
+                    ) : (
+                      "–"
+                    )}
+                  </td>
                   <td className="px-3 py-2">
                     {ticket ? (
                       <div className="line-clamp-2-safe min-w-52 max-w-90" title={ticket.text}>
@@ -164,13 +197,24 @@ export function ResultsView({ title, fileBase, items, processingMs, modelVersion
                     )}
                   </td>
                   <td className="px-3 py-2">{categoryLabel(p.category)}</td>
-                  <td className="px-3 py-2">{p.team}</td>
+                  <td className="px-3 py-2">
+                    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                      <Icon name={teamIcon(p.team)} size={14} className="text-muted" />
+                      {p.team}
+                    </span>
+                  </td>
                   <td className="px-3 py-2">{p.secondary_category ? categoryLabel(p.secondary_category) : <span className="text-muted">–</span>}</td>
                   <td className="px-3 py-2">{p.is_urgent ? <UrgentBadge /> : <span className="text-muted">No</span>}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{fmt.pct(p.confidence)}</td>
                   <td className="px-3 py-2">{p.needs_human_review ? <ReviewBadge short /> : <span className="text-muted">–</span>}</td>
+                  <td className="sticky right-0 bg-surface px-3 py-1.5 shadow-[-8px_0_12px_-10px_rgb(0_0_0/0.25)]">
+                    <Button size="sm" variant="ghost" icon="play" onClick={() => setRouting(item)} aria-label={`Simulate routing for ${p.ticket_id ?? (row ? `row ${row}` : "this ticket")}`}>
+                      Simulate
+                    </Button>
+                  </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -181,11 +225,14 @@ export function ResultsView({ title, fileBase, items, processingMs, modelVersion
             {filtered.length !== n && ` (filtered from ${fmt.int(n)})`}
           </span>
           <div className="flex gap-2">
-            <Button size="sm" disabled={current === 0} onClick={() => setPage(current - 1)}>← Previous</Button>
-            <Button size="sm" disabled={current >= pages - 1} onClick={() => setPage(current + 1)}>Next →</Button>
+            <Button size="sm" icon="chevronLeft" disabled={current === 0} onClick={() => setPage(current - 1)}>Previous</Button>
+            <Button size="sm" disabled={current >= pages - 1} onClick={() => setPage(current + 1)}>
+              Next <Icon name="chevronRight" size={15} />
+            </Button>
           </div>
         </div>
       </Card>
+      <RouteDialog item={routing} onClose={() => setRouting(null)} />
     </section>
   );
 }

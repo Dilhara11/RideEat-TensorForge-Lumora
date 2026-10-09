@@ -2,7 +2,8 @@
 
 import { useRef, useState, type DragEvent } from "react";
 import { useFeedback } from "../../components/feedback";
-import { Badge, Button, Card, Note, PanelHead } from "../../components/ui";
+import { Icon } from "../../components/icons";
+import { Badge, Button, Card, Note, PanelHead, cx } from "../../components/ui";
 import { ApiError, friendlyMessage, request } from "../../lib/api";
 import { download, fileBase, fmt, newIdempotencyKey, prefersReducedMotion } from "../../lib/format";
 import { LIMITS, TEMPLATE_CSV, loadTickets, type Problem } from "../../lib/tickets";
@@ -132,7 +133,7 @@ export function BatchView({ onJobStarted }: { onJobStarted: () => void }) {
 
   return (
     <>
-      <PanelHead title="Batch classification">
+      <PanelHead eyebrow="Many tickets" title="Batch classification">
         Upload a CSV, JSON or JSONL file with up to 5,000 tickets. Up to 100 tickets are classified straight away. Larger files run as a background job that you can follow in <em>Jobs</em>.
       </PanelHead>
 
@@ -146,9 +147,10 @@ export function BatchView({ onJobStarted }: { onJobStarted: () => void }) {
           onDragOver={(e) => e.preventDefault()}
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
-          className={`flex cursor-pointer flex-col items-center gap-2 rounded-card border-2 border-dashed px-4 py-8 text-center transition-colors focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-focus hover:border-accent hover:bg-accent-soft ${
-            dragOver ? "border-accent bg-accent-soft" : "border-border-strong bg-surface-2"
-          }`}
+          className={cx(
+            "group flex cursor-pointer flex-col items-center gap-2 rounded-card border-2 border-dashed px-4 py-10 text-center transition-[border-color,background-color] duration-200 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-focus hover:border-accent/60 hover:bg-accent-soft/60",
+            dragOver ? "border-accent bg-accent-soft" : "border-border-strong bg-surface-2",
+          )}
         >
           <input
             id="file-input"
@@ -158,24 +160,40 @@ export function BatchView({ onJobStarted }: { onJobStarted: () => void }) {
             className="sr-only"
             onChange={(e) => void handleFile(e.target.files?.[0])}
           />
-          <span aria-hidden="true" className="text-3xl text-accent">⇪</span>
+          <span
+            aria-hidden="true"
+            className={cx(
+              "mb-1 grid size-12 place-items-center rounded-xl bg-surface text-accent shadow-card transition-transform duration-200 group-hover:-translate-y-0.5",
+              dragOver && "-translate-y-1 scale-105",
+            )}
+          >
+            <Icon name="upload" size={22} />
+          </span>
           <span className="font-semibold">
             Drop a file here or <span className="text-accent underline">choose a file</span>
           </span>
-          <span className="text-sm text-muted">
+          <span className="text-[13px] font-medium text-text-2">CSV, JSON or JSONL · up to {fmt.int(LIMITS.job)} tickets</span>
+          <span className="max-w-xl text-[13px] text-muted">
             Columns: <code>channel</code> (chat, email, call_transcript) and <code>text</code> are required. <code>subject</code> and <code>ticket_id</code> are optional. Other
             columns are kept in the export.
           </span>
         </label>
-        <p className="mt-2 text-sm">
-          <button type="button" className="cursor-pointer text-accent underline" onClick={() => download("tickets-template.csv", "﻿" + TEMPLATE_CSV, "text/csv")}>
-            Download a CSV template
+        <p className="mt-3 text-sm">
+          <button
+            type="button"
+            className="inline-flex cursor-pointer items-center gap-1.5 font-semibold text-accent hover:underline"
+            onClick={() => download("tickets-template.csv", "﻿" + TEMPLATE_CSV, "text/csv")}
+          >
+            <Icon name="download" size={15} /> Download a CSV template
           </button>
         </p>
 
         {file.kind === "error" && (
-          <div className="mt-4 border-t border-border pt-4">
-            <span className="break-all font-semibold">{file.name}</span>
+          <div className="mt-4 animate-fade-up border-t border-border pt-4">
+            <span className="inline-flex items-center gap-2 break-all font-semibold">
+              <Icon name="file" size={16} className="text-muted" />
+              {file.name}
+            </span>
             <Note tone="danger" role="alert">
               <strong>Can't read this file. </strong>
               {file.message}
@@ -186,7 +204,7 @@ export function BatchView({ onJobStarted }: { onJobStarted: () => void }) {
         {file.kind === "loaded" && <LoadedFile file={file.file} running={running} onRun={run} onReset={reset} runError={runError} />}
       </Card>
 
-      <div ref={resultsRef} className="scroll-mt-32">
+      <div ref={resultsRef} className="scroll-mt-20">
         {result && <ResultsView {...result} />}
       </div>
     </>
@@ -200,15 +218,29 @@ function LoadedFile({ file, running, onRun, onReset, runError }: { file: Loaded;
   const badRows = new Set(file.problems.map((p) => p.row)).size;
 
   return (
-    <div className="mt-4 border-t border-border pt-4">
+    <div className="mt-5 animate-fade-up border-t border-border pt-5">
       <div className="flex flex-wrap items-center gap-3">
-        <span className="break-all font-semibold">{file.name}</span>
-        <Badge>{fmt.int(file.total)} rows</Badge>
-        {valid > 0 && <Badge tone="ok">{fmt.int(valid)} ready</Badge>}
-        {badRows > 0 && <Badge tone="review">{fmt.int(badRows)} with problems</Badge>}
+        <span aria-hidden="true" className="grid size-10 place-items-center rounded-lg bg-accent-soft text-accent">
+          <Icon name="file" size={19} />
+        </span>
+        <div className="min-w-0">
+          <div className="break-all font-semibold">{file.name}</div>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            <Badge>{fmt.int(file.total)} rows</Badge>
+            {valid > 0 && <Badge tone="ok" icon="check">{fmt.int(valid)} ready</Badge>}
+            {badRows > 0 && <Badge tone="review" icon="alert">{fmt.int(badRows)} with problems</Badge>}
+          </div>
+        </div>
         <span className="flex-1" />
         <Button variant="ghost" onClick={onReset}>Choose another file</Button>
-        <Button variant="primary" disabled={valid === 0 || tooMany} busy={running} busyLabel={asJob ? "Submitting…" : "Classifying…"} onClick={() => onRun(file)}>
+        <Button
+          variant="primary"
+          icon={asJob ? "layers" : "tag"}
+          disabled={valid === 0 || tooMany}
+          busy={running}
+          busyLabel={asJob ? "Submitting…" : "Classifying…"}
+          onClick={() => onRun(file)}
+        >
           {asJob ? `Start background job (${fmt.int(valid)} tickets)` : `Classify ${fmt.int(valid)} ticket${valid === 1 ? "" : "s"}`}
         </Button>
       </div>
@@ -226,7 +258,7 @@ function LoadedFile({ file, running, onRun, onReset, runError }: { file: Loaded;
         <Note tone="danger">A job can hold at most {fmt.int(LIMITS.job)} tickets. Split the file into smaller parts.</Note>
       ) : (
         valid > 0 && (
-          <p className="mt-2 text-sm text-muted">
+          <p className="mt-3 text-sm text-muted">
             {asJob
               ? `More than ${LIMITS.batch} tickets: they run as a background job on the server. You can follow progress in Jobs and leave this page.`
               : "Up to 100 tickets are classified straight away."}

@@ -2,22 +2,23 @@
 
 import { useId, useRef, useState, type FormEvent } from "react";
 import { useFeedback } from "../../components/feedback";
-import { Badge, Button, Card, EmptyState, FieldError, Note, PanelHead } from "../../components/ui";
+import { Icon, type IconName } from "../../components/icons";
+import { Badge, Button, Card, EmptyState, FieldError, Note, PanelHead, cx } from "../../components/ui";
 import { ApiError, friendlyMessage, request } from "../../lib/api";
 import { download, fileBase, fmt, prefersReducedMotion } from "../../lib/format";
 import type { JobStatus, ResultItem } from "../../lib/types";
 import { ResultsView } from "../results/ResultsView";
 import { isActive, jobStore, useJobs, type JobState, type TrackedJob } from "./jobStore";
 
-const STATUS: Record<JobState, { label: string; tone: "info" | "ok" | "danger" | "neutral" }> = {
-  unknown: { label: "Checking…", tone: "neutral" },
-  queued: { label: "Queued", tone: "info" },
-  running: { label: "Running", tone: "info" },
-  succeeded: { label: "Finished", tone: "ok" },
-  failed: { label: "Failed", tone: "danger" },
-  cancelled: { label: "Cancelled", tone: "neutral" },
-  gone: { label: "Not found", tone: "neutral" },
-  expired: { label: "Expired", tone: "neutral" },
+const STATUS: Record<JobState, { label: string; tone: "info" | "ok" | "danger" | "neutral"; icon: IconName }> = {
+  unknown: { label: "Checking…", tone: "neutral", icon: "clock" },
+  queued: { label: "Queued", tone: "info", icon: "clock" },
+  running: { label: "Running", tone: "info", icon: "activity" },
+  succeeded: { label: "Finished", tone: "ok", icon: "checkCircle" },
+  failed: { label: "Failed", tone: "danger", icon: "alert" },
+  cancelled: { label: "Cancelled", tone: "neutral", icon: "stop" },
+  gone: { label: "Not found", tone: "neutral", icon: "search" },
+  expired: { label: "Expired", tone: "neutral", icon: "clock" },
 };
 
 interface Shown {
@@ -104,23 +105,35 @@ function JobCard({ job, onShow }: { job: TrackedJob; onShow: (s: Shown) => void 
   }
 
   return (
-    <article aria-label={job.label} className="rounded-card border border-border bg-surface p-4 shadow-card">
-      <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span className="mr-auto break-all font-semibold">{job.label}</span>
-        <Badge tone={status.tone}>{status.label}</Badge>
+    <article aria-label={job.label} className="animate-fade-up rounded-card border border-border bg-surface p-4 shadow-card sm:p-5">
+      <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+        <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-lg bg-surface-2 text-text-2">
+          <Icon name="file" size={19} />
+        </span>
+        <div className="mr-auto min-w-0">
+          <div className="break-all font-semibold">{job.label}</div>
+          <div className="break-all font-mono text-[12.5px] text-muted">{job.id}</div>
+        </div>
+        <Badge tone={status.tone} icon={status.icon}>{status.label}</Badge>
       </div>
-      <div className="break-all font-mono text-[13px] text-muted">Job ID {job.id}</div>
 
-      <div className="mt-3">
+      <div className="mt-4">
         <div
           role="progressbar"
           aria-label={`Progress of ${job.label}`}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.round(pct * 100)}
-          className="h-2 overflow-hidden rounded bg-accent-track"
+          className="h-2 overflow-hidden rounded-full bg-accent-track"
         >
-          <div className="h-full rounded-r bg-mark transition-[width] duration-300" style={{ width: `${pct * 100}%` }} />
+          <div
+            className={cx(
+              "h-full rounded-full transition-[width] duration-500 ease-out",
+              job.state === "succeeded" ? "bg-success" : "bg-mark",
+              job.state === "running" && "progress-stripes animate-stripes",
+            )}
+            style={{ width: `${pct * 100}%` }}
+          />
         </div>
         <div className="mt-1 flex justify-between text-[13px] tabular-nums text-text-2">
           <span>{s ? `${fmt.int(processed)} of ${fmt.int(total)} tickets` : ""}</span>
@@ -128,7 +141,7 @@ function JobCard({ job, onShow }: { job: TrackedJob; onShow: (s: Shown) => void 
         </div>
       </div>
 
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-muted">
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-muted">
         <span>{s?.created_at ? `Started ${fmt.time(s.created_at)}` : `Added ${fmt.time(job.addedAt)}`}</span>
         {s?.finished_at && <span>Finished {fmt.time(s.finished_at)}</span>}
         {s?.expires_at && <span>Results kept until {fmt.time(s.expires_at)}</span>}
@@ -140,16 +153,16 @@ function JobCard({ job, onShow }: { job: TrackedJob; onShow: (s: Shown) => void 
       </div>
       {message}
 
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-3">
         {job.state === "succeeded" && (
           <>
-            <Button size="sm" variant="primary" busy={loading !== null} busyLabel={loading ?? undefined} onClick={view}>View results</Button>
-            <Button size="sm" disabled={loading !== null} onClick={downloadJson}>Download JSON</Button>
+            <Button size="sm" variant="primary" icon="eye" busy={loading !== null} busyLabel={loading ?? undefined} onClick={view}>View results</Button>
+            <Button size="sm" icon="download" disabled={loading !== null} onClick={downloadJson}>Download JSON</Button>
           </>
         )}
-        {isActive(job.state) && <Button size="sm" variant="danger-ghost" onClick={remove}>Cancel job</Button>}
+        {isActive(job.state) && <Button size="sm" variant="danger-ghost" icon="stop" onClick={remove}>Cancel job</Button>}
         {(job.state === "succeeded" || job.state === "failed" || job.state === "cancelled") && (
-          <Button size="sm" variant="danger-ghost" onClick={remove}>Delete from server</Button>
+          <Button size="sm" variant="danger-ghost" icon="trash" onClick={remove}>Delete from server</Button>
         )}
         <Button size="sm" variant="ghost" title="Remove from this list only. The job stays on the server." onClick={() => jobStore.forget(job.id)}>
           Remove from list
@@ -190,13 +203,13 @@ export function JobsView() {
 
   return (
     <>
-      <PanelHead title="Background jobs">
+      <PanelHead eyebrow="Large files" title="Background jobs">
         Jobs started from this browser, with live progress. Results stay on the server for 6 hours after a job finishes. To follow a job started elsewhere, open it by its ID.
       </PanelHead>
 
       <Card>
         <form onSubmit={openById} noValidate>
-          <label htmlFor="job-id-input" className="mb-1 block text-sm font-semibold">Open a job by ID</label>
+          <label htmlFor="job-id-input" className="mb-1.5 block text-sm font-semibold">Open a job by ID</label>
           <div className="flex max-w-2xl gap-2">
             <input
               id="job-id-input"
@@ -211,7 +224,7 @@ export function JobsView() {
               aria-describedby={openError ? errorId : undefined}
               className="control min-w-0 flex-1"
             />
-            <Button type="submit">Open</Button>
+            <Button type="submit" icon="search">Open</Button>
           </div>
           <FieldError id={errorId}>{openError}</FieldError>
         </form>
@@ -220,7 +233,7 @@ export function JobsView() {
       <div className="mb-6 grid gap-3" aria-live="polite">
         {jobs.length === 0 ? (
           <Card>
-            <EmptyState icon="☰" title="No jobs yet.">Upload more than 100 tickets in Batch and the job shows up here.</EmptyState>
+            <EmptyState icon="layers" title="No jobs yet">Upload more than 100 tickets in Batch and the job shows up here.</EmptyState>
           </Card>
         ) : (
           jobs.map((j) => <JobCard key={j.id} job={j} onShow={show} />)
