@@ -78,10 +78,10 @@ Open **http://localhost:4173**.
 
 | # | Do | ✅ Expect |
 |---|---|---|
-| 3.1 | Look at the header | Green dot, **"Model ready · v1.2-558395869056"**. Button **"Set API key"** |
+| 3.1 | Look at the sidebar (top bar on phones) | Green dot, **"Model ready"** with `v1.2-558395869056` under it. Button **"Set API key"** |
 | 3.2 | Click the first sample (Sinhala) | The **API key** dialog opens: "⚠ Enter the API key to classify tickets." |
 | 3.3 | Type `wrong-key` → **Save** | "⚠ This key was rejected by the server. Check it and try again." |
-| 3.4 | Type `local-test-key` → **Save** | The dialog closes, the Sinhala ticket is classified on its own (**Lost item**), and the header shows **"API key set"** |
+| 3.4 | Type `local-test-key` → **Save** | The dialog closes, the Sinhala ticket is classified on its own (**Lost item**), and the sidebar shows **"API key set"** |
 
 ## 4. Classify tab: the 9 samples
 
@@ -93,9 +93,9 @@ Click each sample card. The result appears on the right.
 | 2 | Tamil · Chat | Lost item → Lost & Found | 89 % | Not urgent · Safe to auto-route |
 | 3 | Singlish · Chat | Delivery delay → Delivery Operations | 94 % | Not urgent · Safe to auto-route |
 | 4 | Tanglish · Chat | Food quality → Restaurant Quality | 94 % | Not urgent · Safe to auto-route |
-| 5 | English · Call transcript | Safety or conduct → Trust & Safety | 75 % | **▲ Urgent** + red "Urgent. Handle this ticket first…" note |
+| 5 | English · Call transcript | Safety or conduct → Trust & Safety | 75 % | **⚡ Urgent** + red "Urgent. Handle this ticket first…" note |
 | 6 | Mixed script · Chat | Payment or refund → Payments & Refunds | 97 % | Not urgent · Safe to auto-route |
-| 7 | Tamil · Call transcript | Safety or conduct → Trust & Safety | 71 % | **▲ Urgent** |
+| 7 | Tamil · Call transcript | Safety or conduct → Trust & Safety | 71 % | **⚡ Urgent** |
 | 8 | Spam · Email | Spam or irrelevant → Auto-close / Spam Filter | 89 % | Blue note "Looks like spam…" |
 | 9 | Ambiguous · shows review | Safety or conduct → Trust & Safety | 67 % | **● Needs review**, amber bar below the 70 % marker, note "Check before routing…" |
 
@@ -166,13 +166,17 @@ Also check:
 | 6.14 | Jobs → Open a job by ID: `no-such-job` | "⚠ No job with this ID. Check it and try again." |
 | 6.15 | Jobs → open a real job ID (copy one from a card or from curl) | The job is added to the list and followed live |
 
-## 7. API tab
+## 7. Routing simulation
 
 | # | Do | ✅ Expect |
 |---|---|---|
-| 7.1 | Open **API** | The first example is `curl -s http://localhost:8000/health`. Examples point at the **API** (port 8000), not at the UI |
-| 7.2 | **Copy** an example and run it in a terminal (`export API_KEY=local-test-key` first) | It works as shown |
-| 7.3 | **Interactive docs (Swagger) ↗** | `http://localhost:8000/docs` opens in a new tab. It needs internet in your browser (Swagger UI loads from a CDN) |
+| 7.1 | Classify → sample 5 (English · Call transcript) → **Simulate routing** | The page scrolls to "Routing simulation". Five steps light up in turn (Intake → Classifier → Priority check → Confidence gate → Dispatch). Priority check turns red, **"Urgent: priority lane"**. The gate is green, **"Cleared to auto-route"** |
+| 7.2 | Wait for the end | Status says **"Routed to Trust & Safety on the priority lane."** On the dispatch board, **Trust & Safety** is highlighted with **Assigned** + **Priority**, the other queues are dimmed, and a secondary team (if any) has a dashed **CC · secondary** tile |
+| 7.3 | Sample 9 (Ambiguous) → **Simulate routing** | Gate is amber, **"Held for human review"**. **Human review desk** shows **Holding** and the suggested team shows **Pending review** |
+| 7.4 | Sample 8 (Spam), then simulate | Dispatch says **"Auto-closed"**. Status: "Closed automatically as spam." |
+| 7.5 | During a replay click **Skip to result**, then **Replay** | It jumps to the end, and Replay plays it again from the start |
+| 7.6 | Batch → `01_quick_batch.csv` → classify → **Simulate** on any table row | A dialog opens and plays that row's routing. **Esc**, **×** or a click outside closes it |
+| 7.7 | OS setting "reduce motion" on, then simulate | No animation: the final routed state shows at once |
 
 ## 8. Configuration failures (what an Amplify misconfiguration looks like)
 
@@ -186,9 +190,9 @@ Also check:
 
 | # | Do | ✅ Expect |
 |---|---|---|
-| 9.1 | Click **◐** | It switches light ↔ dark and remembers the choice after a reload |
-| 9.2 | Click a tab, then press **← / →** | Focus moves between tabs. The URL hash changes (`#batch`, `#jobs`) |
-| 9.3 | F12 → device toolbar → 390 px wide | One column, no sideways scrolling. Tapping a sample scrolls to the result |
+| 9.1 | Click the **moon / sun** icon (bottom of the sidebar) | It switches light ↔ dark and remembers the choice after a reload |
+| 9.2 | Click **Batch** / **Jobs** in the sidebar | The view fades in and the URL hash changes (`#batch`, `#jobs`). Back/forward and a reload keep the view |
+| 9.3 | F12 → device toolbar → 390 px wide | Sidebar becomes a top bar, one column, no sideways scrolling. Tapping a sample scrolls to the result. The routing steps stack vertically |
 | 9.4 | Sinhala/Tamil text shows as boxes? | Your OS lacks the fonts (Windows/macOS/Android have them; on bare Linux install `fonts-noto`) |
 
 ## 10. API contract check (no UI)

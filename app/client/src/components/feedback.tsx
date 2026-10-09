@@ -1,6 +1,7 @@
 // App-wide feedback: toast messages and a promise-based confirm dialog for destructive actions.
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { Icon } from "./icons";
 import { Button } from "./ui";
 
 interface ConfirmOptions {
@@ -23,13 +24,13 @@ export function useFeedback(): Feedback {
 }
 
 export function FeedbackProvider({ children }: { children: ReactNode }) {
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ text: string; n: number } | null>(null);
   const timer = useRef<number | undefined>(undefined);
   const [pending, setPending] = useState<(ConfirmOptions & { resolve: (ok: boolean) => void }) | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
 
   const toast = useCallback((m: string) => {
-    setMessage(m);
+    setMessage((prev) => ({ text: m, n: (prev?.n ?? 0) + 1 }));
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => setMessage(null), 3500);
   }, []);
@@ -56,21 +57,33 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
           e.preventDefault();
           close(false);
         }}
-        className="m-auto w-[min(480px,calc(100vw-32px))] rounded-card border border-border bg-surface p-6 text-text shadow-xl"
+        className="m-auto w-[min(460px,calc(100vw-32px))] rounded-card border border-border bg-surface p-6 text-text shadow-pop"
       >
         {pending && (
           <>
-            <h2 id="confirm-title" className="mb-2 text-lg font-semibold">{pending.title}</h2>
-            <p className="text-muted">{pending.body}</p>
-            <div className="mt-4 flex flex-wrap justify-end gap-2">
+            <div className="flex gap-4">
+              <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-full bg-danger-soft text-danger">
+                <Icon name="alert" size={20} />
+              </span>
+              <div>
+                <h2 id="confirm-title" className="mb-1.5 text-lg font-semibold">{pending.title}</h2>
+                <p className="text-sm text-muted">{pending.body}</p>
+              </div>
+            </div>
+            <div className="mt-6 flex flex-wrap justify-end gap-2">
               <Button onClick={() => close(false)} autoFocus>Cancel</Button>
               <Button variant="danger" onClick={() => close(true)}>{pending.okLabel}</Button>
             </div>
           </>
         )}
       </dialog>
-      <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex justify-center px-4">
-        {message && <div className="max-w-full rounded-md bg-text px-4 py-2 text-sm text-bg shadow-card">{message}</div>}
+      <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-5 z-50 flex justify-center px-4">
+        {message && (
+          <div key={message.n} className="flex max-w-full animate-fade-up items-center gap-2.5 rounded-xl bg-nav-bg px-4 py-2.5 text-sm text-nav-text shadow-pop ring-1 ring-white/10">
+            <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-brand-2" />
+            {message.text}
+          </div>
+        )}
       </div>
     </FeedbackContext.Provider>
   );

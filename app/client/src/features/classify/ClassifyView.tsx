@@ -1,17 +1,20 @@
 // Classify view (support agents, judges): one ticket in, routing decision out.
 
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { Card, EmptyState, FieldError, Note, PanelHead, Button } from "../../components/ui";
+import { Icon } from "../../components/icons";
+import { Button, Card, CardHead, EmptyState, FieldError, Kbd, Note, PanelHead, cx } from "../../components/ui";
 import { ApiError, apiKey, friendlyMessage, request } from "../../lib/api";
 import { fmt, prefersReducedMotion } from "../../lib/format";
 import { CHANNELS, CHANNEL_LABEL, LIMITS, SAMPLES, validateTicket } from "../../lib/tickets";
 import type { Channel, Prediction, Ticket } from "../../lib/types";
+import { RoutingSimulator, type RoutingSimulatorHandle } from "../routing/RoutingSimulator";
+import { CHANNEL_ICON } from "../routing/teams";
 import { PredictionCard } from "./PredictionCard";
 
 type Result =
   | { kind: "empty" }
   | { kind: "loading" }
-  | { kind: "ok"; prediction: Prediction; ms: number }
+  | { kind: "ok"; prediction: Prediction; ms: number; ticket: Ticket; n: number }
   | { kind: "error"; error: unknown };
 
 export function ClassifyView() {
@@ -22,6 +25,9 @@ export function ClassifyView() {
   const [result, setResult] = useState<Result>({ kind: "empty" });
   const textRef = useRef<HTMLTextAreaElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
+  const simRef = useRef<HTMLDivElement>(null);
+  const sim = useRef<RoutingSimulatorHandle>(null);
+  const runs = useRef(0);
   const inFlight = useRef<AbortController | null>(null);
   const retryAfterKey = useRef<Ticket | null>(null); // a 401 opened the key dialog: resume once a key is saved
   const errorId = useId();
@@ -44,7 +50,7 @@ export function ClassifyView() {
     }
     try {
       const { data, ms } = await request<Prediction>("/predict", { method: "POST", body: ticket, signal: ctrl.signal });
-      setResult({ kind: "ok", prediction: data, ms });
+      setResult({ kind: "ok", prediction: data, ms, ticket, n: ++runs.current });
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
       retryAfterKey.current = err instanceof ApiError && err.status === 401 ? ticket : null;
@@ -62,8 +68,12 @@ export function ClassifyView() {
         }
       }),
     [], // classify only uses refs and state setters: subscribe once
-  
   );
+
+  const simulate = () => {
+    simRef.current?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
+    sim.current?.play();
+  };
 
   const current = (): Ticket => ({ channel, text, subject: channel === "email" ? subject : "" });
 
@@ -80,16 +90,16 @@ export function ClassifyView() {
 
   return (
     <>
-      <PanelHead title="Classify a ticket">
-        Paste a ticket in English, Sinhala, Tamil, Singlish or Tanglish. You get the category, the team to route it to, urgency and how confident the model is.
+      <PanelHead eyebrow="Single ticket" title="Classify & route a ticket">
+        Paste a ticket in English, Sinhala, Tamil, Singlish or Tanglish. Get its category, destination team, urgency and confidence, then replay how it is routed.
       </PanelHead>
 
-      <div className="grid items-start gap-6 lg:grid-cols-2">
-        <Card>
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <Card className="mb-0">
           <form onSubmit={onSubmit} onKeyDown={onKeyDown} noValidate>
-            <fieldset className="mb-4 min-w-0">
-              <legend className="mb-1 text-sm font-semibold">Channel</legend>
-              <div role="radiogroup" className="inline-flex flex-wrap overflow-hidden rounded-md border border-border-strong">
+            <fieldset className="mb-5 min-w-0">
+              <legend className="mb-1.5 text-sm font-semibold">Channel</legend>
+              <div role="radiogroup" className="inline-flex max-w-full flex-wrap gap-1 rounded-xl border border-border bg-surface-2 p-1">
                 {CHANNELS.map((c) => (
                   <label key={c} className="relative">
                     <input
@@ -100,7 +110,8 @@ export function ClassifyView() {
                       onChange={() => setChannel(c)}
                       className="peer absolute inset-0 m-0 cursor-pointer opacity-0"
                     />
-                    <span className="block min-h-[42px] border-r border-border px-4 py-2.5 font-semibold text-text-2 peer-checked:bg-accent peer-checked:text-on-accent peer-focus-visible:outline-2 peer-focus-visible:-outline-offset-4 peer-focus-visible:outline-focus">
+                    <span className="flex min-h-9 items-center gap-2 rounded-lg px-3.5 py-1.5 text-sm font-semibold text-text-2 transition-colors peer-checked:bg-surface peer-checked:text-accent peer-checked:shadow-card peer-hover:text-text peer-focus-visible:outline-2 peer-focus-visible:outline-focus">
+                      <Icon name={CHANNEL_ICON[c]} size={15} />
                       {CHANNEL_LABEL[c]}
                     </span>
                   </label>
@@ -109,18 +120,20 @@ export function ClassifyView() {
             </fieldset>
 
             {channel === "email" && (
-              <div className="mb-4">
-                <label htmlFor="subject" className="mb-1 block text-sm font-semibold">
+              <div className="mb-4 animate-fade-up">
+                <label htmlFor="subject" className="mb-1.5 block text-sm font-semibold">
                   Email subject <span className="font-normal text-muted">(optional)</span>
                 </label>
                 <input id="subject" type="text" maxLength={LIMITS.subject} autoComplete="off" value={subject} onChange={(e) => setSubject(e.target.value)} className="control" />
               </div>
             )}
 
-            <div className="mb-4">
+            <div className="mb-5">
               <div className="flex items-baseline justify-between gap-2">
-                <label htmlFor="text" className="mb-1 block text-sm font-semibold">Ticket text</label>
-                <span className="text-sm text-muted">{fmt.int(text.length)} / {fmt.int(LIMITS.text)}</span>
+                <label htmlFor="text" className="mb-1.5 block text-sm font-semibold">Ticket text</label>
+                <span className={cx("text-[13px] tabular-nums", text.length > LIMITS.text * 0.9 ? "text-warning" : "text-muted")}>
+                  {fmt.int(text.length)} / {fmt.int(LIMITS.text)}
+                </span>
               </div>
               <textarea
                 id="text"
@@ -128,6 +141,7 @@ export function ClassifyView() {
                 rows={8}
                 maxLength={LIMITS.text}
                 required
+                placeholder="e.g. bro mage order eka hour ekakata wada late, refund ekak denna"
                 value={text}
                 onChange={(e) => {
                   setText(e.target.value);
@@ -135,18 +149,15 @@ export function ClassifyView() {
                 }}
                 aria-invalid={Boolean(fieldError)}
                 aria-describedby={`text-hint ${fieldError ? errorId : ""}`}
-                className="control min-h-40 resize-y leading-relaxed"
+                className="control min-h-44 resize-y leading-relaxed placeholder:text-muted/70"
               />
-              <p id="text-hint" className="mt-1 text-[13px] text-muted">
-                Tip: press <kbd className="rounded border border-b-2 border-border-strong px-1">Ctrl</kbd> +{" "}
-                <kbd className="rounded border border-b-2 border-border-strong px-1">Enter</kbd> to classify.
-              </p>
               <FieldError id={errorId}>{fieldError}</FieldError>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <Button type="submit" variant="primary" busy={result.kind === "loading"} busyLabel="Classifying…">Classify</Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="submit" variant="primary" icon="tag" busy={result.kind === "loading"} busyLabel="Classifying…">Classify ticket</Button>
               <Button
+                variant="ghost"
                 onClick={() => {
                   setText("");
                   setSubject("");
@@ -157,13 +168,16 @@ export function ClassifyView() {
               >
                 Clear
               </Button>
+              <p id="text-hint" className="ml-auto hidden text-[13px] text-muted sm:block">
+                <Kbd>Ctrl</Kbd> + <Kbd>Enter</Kbd> to classify
+              </p>
             </div>
           </form>
 
-          <div className="mt-6 border-t border-border pt-4">
-            <h2 className="mb-1 font-semibold">Try a sample ticket</h2>
-            <p className="mb-3 text-sm text-muted">Real-style tickets from each supported language. Click one to fill the form and classify it.</p>
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-2">
+          <div className="mt-6 border-t border-border pt-5">
+            <h2 className="mb-0.5 text-sm font-semibold">Try a sample ticket</h2>
+            <p className="mb-3 text-[13px] text-muted">Real-style tickets in each supported language. Click one to fill the form and classify it.</p>
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2">
               {SAMPLES.map((s, i) => (
                 <button
                   key={i}
@@ -174,27 +188,35 @@ export function ClassifyView() {
                     setText(s.text);
                     void classify({ channel: s.channel, subject: s.subject, text: s.text });
                   }}
-                  className="flex min-h-11 cursor-pointer flex-col gap-0.5 rounded-md border border-border bg-surface-2 px-3 py-2 text-left transition-colors hover:border-accent hover:bg-accent-soft"
+                  className="group flex min-h-11 cursor-pointer flex-col gap-1 rounded-lg border border-border bg-surface px-3 py-2.5 text-left transition-[border-color,background-color,box-shadow] duration-150 hover:border-accent/50 hover:bg-accent-soft/60 hover:shadow-card"
                 >
-                  <span className="text-xs font-semibold uppercase tracking-wide text-accent">{s.lang} · {CHANNEL_LABEL[s.channel]}</span>
-                  <span lang={s.code} className="line-clamp-2-safe text-[13px] text-text-2">{s.subject ? `${s.subject}: ${s.text}` : s.text}</span>
+                  <span className="flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-accent">
+                    <Icon name={CHANNEL_ICON[s.channel]} size={12} />
+                    {s.lang}
+                  </span>
+                  <span lang={s.code} className="line-clamp-2-safe text-[13px] text-text-2 group-hover:text-text">{s.subject ? `${s.subject}: ${s.text}` : s.text}</span>
                 </button>
               ))}
             </div>
           </div>
         </Card>
 
-        <Card ref={resultRef} className="min-h-80 scroll-mt-4 lg:sticky lg:top-32" aria-live="polite" aria-busy={result.kind === "loading"}>
+        <Card ref={resultRef} className="mb-0 min-h-80 scroll-mt-20 lg:sticky lg:top-6" aria-live="polite" aria-busy={result.kind === "loading"}>
           {result.kind === "empty" && (
-            <EmptyState icon="⇢" title="No ticket classified yet.">Write a ticket or pick a sample. The result appears here.</EmptyState>
+            <EmptyState icon="route" title="No ticket classified yet">Write a ticket or pick a sample. The category, team and routing decision appear here.</EmptyState>
           )}
           {result.kind === "loading" && (
             <div className="animate-pulse">
               <p className="sr-only">Classifying…</p>
-              <div className="mb-3 h-8 w-3/5 rounded-md bg-surface-2" />
-              <div className="mb-3 h-4 rounded-md bg-surface-2" />
-              <div className="mb-3 h-4 rounded-md bg-surface-2" />
-              <div className="h-4 w-2/3 rounded-md bg-surface-2" />
+              <div className="mb-2 h-3 w-24 rounded bg-surface-3" />
+              <div className="mb-6 h-8 w-3/5 rounded-md bg-surface-3" />
+              <div className="mb-6 h-[78px] rounded-xl bg-surface-2" />
+              <div className="mb-2 h-4 w-1/2 rounded bg-surface-3" />
+              <div className="mb-6 h-2.5 rounded-full bg-surface-3" />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="h-16 rounded-lg bg-surface-2" />
+                <div className="h-16 rounded-lg bg-surface-2" />
+              </div>
             </div>
           )}
           {result.kind === "error" && (
@@ -212,9 +234,16 @@ export function ClassifyView() {
               )}
             </Note>
           )}
-          {result.kind === "ok" && <PredictionCard p={result.prediction} ms={result.ms} />}
+          {result.kind === "ok" && <PredictionCard key={result.n} p={result.prediction} ms={result.ms} onSimulate={simulate} />}
         </Card>
       </div>
+
+      {result.kind === "ok" && (
+        <Card ref={simRef} className="mt-6 scroll-mt-6 animate-fade-up">
+          <CardHead icon="route" title="Routing simulation" sub="A visual replay of how this ticket moves through triage. Every step comes from the prediction above." />
+          <RoutingSimulator key={result.n} ref={sim} prediction={result.prediction} ticket={result.ticket} />
+        </Card>
+      )}
     </>
   );
 }
