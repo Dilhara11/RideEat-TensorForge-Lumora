@@ -11,11 +11,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 def repo_root(config_file: Path) -> Path:
-    """Base folder for the default paths (only used when MODEL_DIR/DATA_DIR/FRONTEND_DIR are not set).
+    """Base folder for the default paths (only used when MODEL_DIR/DATA_DIR are not set).
 
     Example: /home/me/TensorForge/app/server/tfengine/config.py -> /home/me/TensorForge  (repo checkout)
              /app/tfengine/config.py                            -> /app                  (Docker image; the
-             image sets MODEL_DIR/DATA_DIR/FRONTEND_DIR, so these defaults are never used there)
+             image sets MODEL_DIR/DATA_DIR, so these defaults are never used there)
     """
     parents = Path(config_file).resolve().parents
     if len(parents) > 3 and parents[1].name == "server" and parents[2].name == "app":
@@ -38,6 +38,13 @@ def _env_float(name: str, default: float) -> float:
     # Example: PREDICT_READY_TIMEOUT_S="2.5" -> 2.5
     raw = os.getenv(name, "").strip()
     return float(raw) if raw else default
+
+
+def _env_origins(name: str) -> tuple[str, ...]:
+    # Example: CORS_ORIGINS="https://main.d1abc.amplifyapp.com/, http://localhost:5173"
+    #          -> ("https://main.d1abc.amplifyapp.com", "http://localhost:5173")   (browsers send no trailing slash)
+    raw = os.getenv(name, "")
+    return tuple(o.strip().rstrip("/") for o in raw.split(",") if o.strip())
 
 
 def _env_path(name: str, default: Path) -> Path:
@@ -82,8 +89,10 @@ class Settings:
     worker_poll_s: float = 1.0
     sweep_interval_s: float = 5.0
 
-    # --- UI -------------------------------------------------------------------------------
-    frontend_dir: Path = _REPO_ROOT / "app" / "frontend"
+    # --- browser access (the web client is hosted separately, e.g. AWS Amplify) ---------------
+    # Origins allowed to call the API from a browser. Empty = CORS off (no CORS headers at all),
+    # which is the default and what the evaluation harness sees.
+    cors_origins: tuple[str, ...] = ()
 
     # --- logging --------------------------------------------------------------------------
     log_level: str = "INFO"
@@ -122,6 +131,6 @@ class Settings:
             max_queued_jobs=_env_int("MAX_QUEUED_JOBS", d.max_queued_jobs),
             job_chunk_size=_env_int("JOB_CHUNK_SIZE", d.job_chunk_size),
             heartbeat_stale_s=_env_float("HEARTBEAT_STALE_S", d.heartbeat_stale_s),
-            frontend_dir=_env_path("FRONTEND_DIR", d.frontend_dir),
+            cors_origins=_env_origins("CORS_ORIGINS"),
             log_level=os.getenv("LOG_LEVEL", d.log_level).upper(),
         )

@@ -7,7 +7,6 @@
 !training/models/winner/inference_config.json
 !training/models/winner/labels.json
 !training/models/winner/tokenizer/
-!app/frontend/
 
 # Never ship caches or Windows download markers.
 **/__pycache__

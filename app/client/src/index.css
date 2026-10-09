@@ -1,0 +1,182 @@
+/* Tailwind 4 + semantic design tokens.
+   Components use token utilities (bg-surface, text-muted, bg-mark…); the tokens switch per theme, so no
+   `dark:` variants are needed. Theme = OS preference unless the user picked one (html[data-theme]).
+   Colour is used for meaning only: accent = interactive, danger = urgent/error, warning = needs review, success = ok. */
+@import "tailwindcss";
+/* Manual-test tickets are data, not markup: keep them out of Tailwind's class scan. */
+@source not "../test-data";
+
+:root {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #f0f2f5;
+  --border: #d9dde3;
+  --border-strong: #b8bec8;
+  --text: #1b1f24;
+  --text-2: #4a5260;
+  --muted: #5f6774;
+  --accent: #2456c7;
+  --accent-hover: #1c46a6;
+  --accent-soft: #e6edfb;
+  --accent-track: #d3defa;
+  --on-accent: #ffffff;
+  --mark: #2456c7; /* data marks (bars, meters, progress), validated per theme with the dataviz palette checker */
+  --danger: #b42318;
+  --danger-soft: #fdecea;
+  --on-danger: #ffffff;
+  --warning: #8a5300;
+  --warning-fill: #c27a00;
+  --warning-soft: #fff4dc;
+  --success: #1a7f37;
+  --success-soft: #e7f5ec;
+  --focus: #2456c7;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111418;
+    --surface: #1a1e24;
+    --surface-2: #222730;
+    --border: #2f3640;
+    --border-strong: #46505c;
+    --text: #e8eaed;
+    --text-2: #c2c7cf;
+    --muted: #9aa2ad;
+    --accent: #7aa2f7;
+    --accent-hover: #9bb9fa;
+    --accent-soft: #1d2a45;
+    --accent-track: #26365a;
+    --on-accent: #0d1424;
+    --mark: #5b8ef0;
+    --danger: #ff8a80;
+    --danger-soft: #3a1d1b;
+    --on-danger: #1a0d0c;
+    --warning: #f5c26b;
+    --warning-fill: #b98018;
+    --warning-soft: #352a14;
+    --success: #6fd38c;
+    --success-soft: #16301f;
+    --focus: #9bb9fa;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #111418;
+  --surface: #1a1e24;
+  --surface-2: #222730;
+  --border: #2f3640;
+  --border-strong: #46505c;
+  --text: #e8eaed;
+  --text-2: #c2c7cf;
+  --muted: #9aa2ad;
+  --accent: #7aa2f7;
+  --accent-hover: #9bb9fa;
+  --accent-soft: #1d2a45;
+  --accent-track: #26365a;
+  --on-accent: #0d1424;
+  --mark: #5b8ef0;
+  --danger: #ff8a80;
+  --danger-soft: #3a1d1b;
+  --on-danger: #1a0d0c;
+  --warning: #f5c26b;
+  --warning-fill: #b98018;
+  --warning-soft: #352a14;
+  --success: #6fd38c;
+  --success-soft: #16301f;
+  --focus: #9bb9fa;
+  color-scheme: dark;
+}
+
+/* Expose the tokens as Tailwind colours: bg-surface, text-muted, border-border, bg-mark, ... */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-text-2: var(--text-2);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-track: var(--accent-track);
+  --color-on-accent: var(--on-accent);
+  --color-mark: var(--mark);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-on-danger: var(--on-danger);
+  --color-warning: var(--warning);
+  --color-warning-fill: var(--warning-fill);
+  --color-warning-soft: var(--warning-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-focus: var(--focus);
+}
+
+@theme {
+  /* System fonts only (offline), with Sinhala and Tamil faces for every major OS. */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Nirmala UI", "Noto Sans Sinhala",
+    "Noto Sans Tamil", "Sinhala Sangam MN", "Tamil Sangam MN", "Iskoola Pota", "Latha", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  --radius-card: 10px;
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.06), 0 1px 3px rgb(16 24 40 / 0.08);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-bg font-sans text-[15px] leading-normal text-text;
+    min-height: 100vh;
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  code,
+  kbd {
+    @apply font-mono text-[0.9em];
+  }
+  dialog::backdrop {
+    background: rgb(10 14 20 / 0.45);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+  @media (forced-colors: active) {
+    .bg-mark,
+    .bg-warning-fill {
+      background: Highlight !important;
+    }
+  }
+}
+
+/* Shared form-control look (inputs, textarea, select). */
+@utility control {
+  @apply min-h-11 w-full rounded-md border border-border-strong bg-surface px-3 py-2.5 text-text;
+  &:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 0;
+    border-color: var(--focus);
+  }
+  &[aria-invalid="true"] {
+    border-color: var(--danger);
+  }
+}
+
+@utility line-clamp-2-safe {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}

@@ -5,6 +5,8 @@
 # Run (contract command):
 #   docker run -p 8000:8000 -e API_KEY=<key> tensorforge-api
 # Optional: keep job state across container re-creation with  -v tf-jobs:/app/data
+# Optional: let the separately hosted web client (app/client, e.g. on AWS Amplify) call the API:
+#   -e CORS_ORIGINS=https://main.<app-id>.amplifyapp.com
 #
 # The build context is filtered by app/server/Dockerfile.dockerignore (BuildKit), so checkpoints,
 # staging models and the dataset are never sent to the daemon.
@@ -33,23 +35,19 @@ COPY training/models/winner/tokenizer/ /app/model/tokenizer/
 # 3) Engine code.
 COPY app/server/tfengine/ /app/tfengine/
 
-# 4) Frontend (added by the frontend plan; the engine serves FRONTEND_DIR/index.html at "/" if present).
-# COPY app/frontend/ /app/frontend/
-
-# 5) Build-time checks: the app module imports cleanly from the image layout (catches startup crashes
+# 4) Build-time checks: the app module imports cleanly from the image layout (catches startup crashes
 #    at build time), the bundle is complete, labels match the contract, sha256 matches model_version.
 RUN python -c "import tfengine.main; from tfengine.config import Settings; Settings.from_env(); \
 from tfengine.inference import ModelBundle; b = ModelBundle.open('/app/model'); b.verify_hash(); \
 print('import ok | model_version', b.model_version)"
 
-# 6) Unprivileged user; /app/data holds the SQLite job store.
+# 5) Unprivileged user; /app/data holds the SQLite job store.
 RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin app \
     && mkdir -p /app/data && chown app:app /app/data
 USER app
 
 ENV MODEL_DIR=/app/model \
     DATA_DIR=/app/data \
-    FRONTEND_DIR=/app/frontend \
     ONNX_THREADS=2 \
     LOG_LEVEL=INFO
 

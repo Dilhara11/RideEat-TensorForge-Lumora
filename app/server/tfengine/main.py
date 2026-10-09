@@ -10,7 +10,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 
 from . import __version__
 from .api import ROUTERS
@@ -54,13 +54,23 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.state.engine = engine
 
     install_error_handlers(app)
+    if settings.cors_origins:
+        # The web client is hosted on its own origin (e.g. AWS Amplify) and calls this API from the browser.
+        # Only listed origins get CORS headers; requests without an Origin header (curl, the evaluation
+        # harness) are untouched. No cookies are used (the key travels in a header), so no credentials mode.
+        # Added before RequestContextMiddleware, so it sits inside it: preflights are logged and echo X-Request-ID.
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=list(settings.cors_origins),
+            allow_methods=["GET", "POST", "DELETE"],
+            allow_headers=["X-API-Key", "Authorization", "Content-Type", "Idempotency-Key", "X-Request-ID"],
+            # The client reads Retry-After to pace job polling, and Location after a job submit.
+            expose_headers=["Retry-After", "Location", "X-Request-ID"],
+            max_age=600,
+        )
     app.add_middleware(RequestContextMiddleware)
     for router in ROUTERS:
         app.include_router(router)
-
-    # Optional frontend assets (only when a build exists; never a catch-all mount at "/").
-    if settings.frontend_dir.is_dir():
-        app.mount("/static", StaticFiles(directory=settings.frontend_dir), name="static")
     return app
 
 

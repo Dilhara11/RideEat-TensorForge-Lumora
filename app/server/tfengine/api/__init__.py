@@ -1,5 +1,5 @@
 """HTTP routers."""
 
-from . import health, jobs, predict, ui
+from . import health, jobs, predict, root
 
-ROUTERS = [health.router, predict.router, jobs.router, ui.router]
+ROUTERS = [health.router, predict.router, jobs.router, root.router]
