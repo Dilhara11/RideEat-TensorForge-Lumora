@@ -21,6 +21,14 @@ __pycache__/
 *.egg-info/
 .ipynb_checkpoints/
 
+# ---- Web client (app/client) ----------------------------------------------------------
+# Dependencies and the build output: recreated by `npm ci && npm run build` (the Docker image builds it itself).
+node_modules/
+app/client/dist/
+# Large manual-test files, generated on demand by app/client/test-data/make-test-files.mjs.
+app/client/test-data/08_big_job.csv
+app/client/test-data/09_too_many.csv
+
 # ---- Runtime data ---------------------------------------------------------------------
 # SQLite job store created by local (venv) runs of the API; the container keeps it in /app/data.
 app/server/var/

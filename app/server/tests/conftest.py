@@ -79,7 +79,6 @@ def make_settings(tmp_path: Path, **overrides) -> Settings:
     base = Settings(
         api_key=API_KEY,
         data_dir=tmp_path / "data",
-        frontend_dir=tmp_path / "no-frontend",
         sweep_interval_s=0.2,
         heartbeat_stale_s=30.0,
         predict_ready_timeout_s=5.0,

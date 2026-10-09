@@ -61,6 +61,7 @@ request ─► RequestContextMiddleware (X-Request-ID echo, access log)
 | `jobs/manager.py` | `JobManager`: 202/404/409/410/429 rules, idempotency, paging |
 | `jobs/worker.py` | `JobWorker`: run loop, heartbeat, stale-job sweeper, retention purge |
 | `engine.py` | `Engine`: composition root (tests inject a fake classifier) |
+| `main.py` / `api/root.py` | App factory (optional CORS for the separately hosted web client), JSON service card at `/` |
 
 ### Key behaviours
 
@@ -100,7 +101,7 @@ tickets) is used.
 | `HEARTBEAT_STALE_S` | `30` | Running job without heartbeat → `failed/interrupted` |
 | `PREDICT_READY_TIMEOUT_S` | `60` | How long a prediction waits for a model that is still loading |
 | `VERIFY_MODEL_HASH` | `1` | Check sha256(model.onnx) against `inference_config.json` |
-| `FRONTEND_DIR` | `app/frontend` (image: `/app/frontend`) | If `index.html` exists it is served at `/`, with assets at `/static` |
+| `CORS_ORIGINS` | *(unset → CORS off)* | Comma-separated browser origins allowed to call the API, e.g. the web client on AWS Amplify (`https://main.<app-id>.amplifyapp.com`). Requests without an `Origin` header (curl, the evaluation harness) are unaffected |
 | `LOG_LEVEL` | `INFO` | Logs never contain the API key or ticket text |
 
 ## Tests

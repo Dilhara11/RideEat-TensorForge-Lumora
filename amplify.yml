@@ -1,0 +1,25 @@
+# AWS Amplify Hosting build spec for the web client (app/client), monorepo layout.
+# In the Amplify console: connect this repo, tick "My app is a monorepo", app root = app/client
+# (Amplify then sets AMPLIFY_MONOREPO_APP_ROOT=app/client), and add the environment variable
+#   VITE_API_BASE_URL = https://<your API host>      (no trailing slash; baked in at build time)
+# The API must list this site's URL in CORS_ORIGINS (see app/server/README.md).
+version: 1
+applications:
+  - appRoot: app/client
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - nvm install 22 && nvm use 22   # Vite 8 needs Node >= 22.12
+            - npm ci --no-audit --no-fund
+        build:
+          commands:
+            - npm test                       # CSV/validation unit tests gate the deploy
+            - npm run build                  # type-check + Vite build to dist/
+      artifacts:
+        baseDirectory: dist
+        files:
+          - "**/*"
+      cache:
+        paths:
+          - node_modules/**/*

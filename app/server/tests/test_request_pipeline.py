@@ -83,7 +83,7 @@ def test_request_id_is_echoed(client):
     assert r.status_code == 400 and r.headers["x-request-id"] == "rid-err"
 
 
-def test_root_without_frontend_is_json(client):
+def test_root_is_json_service_card(client):
     r = client.get("/")
     assert r.status_code == 200
     assert r.json()["health"] == "/health"
