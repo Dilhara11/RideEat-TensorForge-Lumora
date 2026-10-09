@@ -33,7 +33,7 @@ Resources:
       Repository: !Ref RepositoryUrl
       AccessToken: !Sub "{{resolve:secretsmanager:${GitHubTokenSecretId}:SecretString}}"
       Platform: WEB
-      # No BuildSpec here: Amplify uses amplify.yml from the repo (Node 22, npm ci, npm test, npm run build, dist/).
+      # Mirrors amplify.yml at the repo root. If both exist, Amplify uses the repo's amplify.yml: keep them identical.
       BuildSpec: |
         version: 1
         applications:
@@ -61,18 +61,22 @@ Resources:
           Value: app/client
         - Name: VITE_API_BASE_URL
           Value: { "Fn::ImportValue": !Sub "${ApiStackName}-ApiUrl" }
+      # Monorepo app (AMPLIFY_MONOREPO_APP_ROOT is set), so headers must be keyed by appRoot under "applications";
+      # the single-app format fails the deploy with "Monorepo spec provided without "applications" key".
       CustomHeaders: |
-        customHeaders:
-          - pattern: '**'
-            headers:
-              - key: Strict-Transport-Security
-                value: max-age=31536000; includeSubDomains
-              - key: X-Content-Type-Options
-                value: nosniff
-              - key: X-Frame-Options
-                value: DENY
-              - key: Referrer-Policy
-                value: strict-origin-when-cross-origin
+        applications:
+          - appRoot: app/client
+            customHeaders:
+              - pattern: '**'
+                headers:
+                  - key: Strict-Transport-Security
+                    value: max-age=31536000; includeSubDomains
+                  - key: X-Content-Type-Options
+                    value: nosniff
+                  - key: X-Frame-Options
+                    value: DENY
+                  - key: Referrer-Policy
+                    value: strict-origin-when-cross-origin
 
   ClientBranch:
     Type: AWS::Amplify::Branch
