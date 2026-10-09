@@ -32,7 +32,7 @@ region = "ap-south-1"
 capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
 confirm_changeset = true
 fail_on_empty_changeset = false
-parameter_overrides = "EcrStackName=\"tensorforge-ecr\" ImageTag=\"20261009-1852-23bf8d5\" ApiKeyParameterName=\"/tensorforge/api/api-key\" CorsOrigins=\"\" InstanceType=\"t4g.medium\" AmiId=\"ami-0cf36b0c962e50fd7\" CloudFrontPrefixListId=\"pl-9aa247f3\""
+parameter_overrides = "EcrStackName=\"tensorforge-ecr\" ImageTag=\"20261009-1852-23bf8d5\" ApiKeyParameterName=\"/tensorforge/api/api-key\" CorsOrigins=\"https://main.d3tyrhj5r7v7ce.amplifyapp.com\" InstanceType=\"t4g.medium\" AmiId=\"ami-0cf36b0c962e50fd7\" CloudFrontPrefixListId=\"pl-9aa247f3\""
 
 
 [client.deploy.parameters]
