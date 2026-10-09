@@ -1,0 +1,47 @@
+# AWS SAM CLI configuration. Run sam from this folder (infra/):
+#   sam deploy --config-env ecr       # stack 1: ECR repository
+#   sam deploy --config-env build     # CodeBuild project that builds the image in AWS (scripts/cloud-build.sh)
+#   sam deploy --config-env api       # stack 2: EC2 + CloudFront API
+#   sam deploy --config-env client    # stack 3: Amplify web client (phase B)
+# This file is the single source of truth for the deployed configuration: edit it, then deploy.
+# No secrets here: the API key is in SSM Parameter Store, the GitHub token in Secrets Manager.
+version = 0.1
+
+[ecr.deploy.parameters]
+template_file = "ecr.yaml"
+stack_name = "tensorforge-ecr"
+region = "ap-south-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+confirm_changeset = true
+fail_on_empty_changeset = false
+parameter_overrides = "RepositoryName=\"tensorforge-api\""
+
+[build.deploy.parameters]
+template_file = "build.yaml"
+stack_name = "tensorforge-build"
+region = "ap-south-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+confirm_changeset = true
+fail_on_empty_changeset = false
+parameter_overrides = "EcrStackName=\"tensorforge-ecr\" RepositoryUrl=\"https://github.com/Dilhara11/RideEat-TensorForge-Lumora.git\" GitHubTokenSecretId=\"tensorforge/github-token\""
+
+[api.deploy.parameters]
+template_file = "api.yaml"
+stack_name = "tensorforge-api"
+region = "ap-south-1"
+AmiId = "ami-0cf36b0c962e50fd7"
+CloudFrontPrefixListId = "pl-9aa247f3"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+confirm_changeset = true
+fail_on_empty_changeset = false
+# README step 2 fills AmiId and CloudFrontPrefixListId, step 5 fills ImageTag; phase B fills CorsOrigins.
+parameter_overrides = "EcrStackName=\"tensorforge-ecr\" ImageTag=\"REPLACE_WITH_PUSHED_TAG\" ApiKeyParameterName=\"/tensorforge/api/api-key\" CorsOrigins=\"\" InstanceType=\"t4g.medium\" AmiId=\"REPLACE_WITH_AMI_ID\" CloudFrontPrefixListId=\"REPLACE_WITH_PREFIX_LIST_ID\""
+
+[client.deploy.parameters]
+template_file = "client.yaml"
+stack_name = "tensorforge-client"
+region = "ap-south-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+confirm_changeset = true
+fail_on_empty_changeset = false
+parameter_overrides = "ApiStackName=\"tensorforge-api\" RepositoryUrl=\"https://github.com/Dilhara11/RideEat-TensorForge-Lumora\" BranchName=\"main\" GitHubTokenSecretId=\"tensorforge/github-token\""

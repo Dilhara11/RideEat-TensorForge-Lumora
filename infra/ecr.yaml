@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  TensorForge 2.0 - container registry for the API image (stack 1 of 2).
+  Deployed before the service stack (api.yaml), because the service pulls the image as soon as it is created.
+
+Parameters:
+  RepositoryName:
+    Type: String
+    Default: tensorforge-api
+    AllowedPattern: "^[a-z0-9][a-z0-9._/-]*$"
+
+Resources:
+  ApiRepository:
+    Type: AWS::ECR::Repository
+    # Keep the images (the evaluated artefacts) even if this stack is deleted or replaced.
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      RepositoryName: !Ref RepositoryName
+      # A tag always points at the same digest: what was tested locally is what runs on Fargate.
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+      # Images are multi-arch (amd64 + arm64): the per-arch manifests are untagged children of the tagged index,
+      # so the rule only counts TAGGED images (an "any" rule could expire the arm64 half of a live tag).
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep the 30 most recent tags (each CodeBuild run makes 3: <tag>, <tag>-amd64, <tag>-arm64)",
+                "selection": { "tagStatus": "tagged", "tagPatternList": ["*"], "countType": "imageCountMoreThan", "countNumber": 30 },
+                "action": { "type": "expire" }
+              }
+            ]
+          }
+
+Outputs:
+  RepositoryUri:
+    Description: docker tag / push target (append :<tag>)
+    Value: !GetAtt ApiRepository.RepositoryUri
+    Export:
+      Name: !Sub "${AWS::StackName}-RepositoryUri"
+  RepositoryArn:
+    Value: !GetAtt ApiRepository.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-RepositoryArn"

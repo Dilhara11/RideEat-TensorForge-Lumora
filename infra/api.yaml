@@ -1,0 +1,369 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  TensorForge 2.0 - API engine on one EC2 instance (Graviton t4g.medium by default) behind CloudFront (stack 2 of 3).
+  The instance runs the contract command (docker run -p 8000:8000 -e API_KEY=... <image>) under systemd, with the
+  job store on a named Docker volume. CloudFront provides the public HTTPS URL (valid TLS, *.cloudfront.net) and is
+  the only client allowed to reach port 8000.
+
+Parameters:
+  EcrStackName:
+    Type: String
+    Default: tensorforge-ecr
+    Description: Stack that owns the ECR repository (ecr.yaml)
+  ImageTag:
+    Type: String
+    Description: Multi-arch tag pushed to ECR (tags are immutable), e.g. 20261009-1830-a2f4eb0
+    AllowedPattern: "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$"
+  ApiKeyParameterName:
+    Type: String
+    Default: /tensorforge/api/api-key
+    AllowedPattern: "^/.+"
+    Description: SSM Parameter Store SecureString holding the evaluation API key (created by hand, never in this template)
+  CorsOrigins:
+    Type: String
+    Default: ""
+    Description: Comma-separated browser origins for the web client (the Amplify URL). Empty = CORS off
+  InstanceType:
+    Type: String
+    Default: t4g.medium
+    AllowedValues: [t4g.medium, c7g.large, t3.medium, c7i.large]
+    Description: >
+      All 2 vCPU / 4 GiB. arm64 - t4g.medium (burstable, Graviton2), c7g.large (fixed, Graviton3).
+      x86_64 - t3.medium (burstable), c7i.large (fixed). AmiId must match the architecture.
+  AmiId:
+    Type: AWS::EC2::Image::Id
+    Description: >
+      Pinned Amazon Linux 2023 AMI for the instance architecture (README step 2). Pinned on purpose: a new AMI
+      replaces the instance (job store lost, ~5 min outage).
+  CloudFrontPrefixListId:
+    Type: String
+    AllowedPattern: "^pl-[0-9a-f]+$"
+    Description: Managed prefix list com.amazonaws.global.cloudfront.origin-facing in this region (README step 2)
+
+Conditions:
+  HasCors: !Not [!Equals [!Ref CorsOrigins, ""]]
+  IsBurstable: !Or
+    - !Equals [!Ref InstanceType, t4g.medium]
+    - !Equals [!Ref InstanceType, t3.medium]
+  IsUsEast1: !Equals [!Ref "AWS::Region", us-east-1]
+
+Resources:
+  # ---------------------------------------------------------------- network: 1 public subnet, no NAT
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.40.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true # gives the Elastic IP its ec2-....compute.amazonaws.com name (CloudFront origin)
+      Tags: [{ Key: Name, Value: tensorforge }]
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.40.0.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: false # the instance's only public address is the Elastic IP
+      Tags: [{ Key: Name, Value: tensorforge-public }]
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+
+  DefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRoutes:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  # Port 8000 is reachable from CloudFront only. No SSH: shell access is SSM Session Manager.
+  ApiSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: TensorForge API - port 8000 from CloudFront origin-facing addresses only
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          SourcePrefixListId: !Ref CloudFrontPrefixListId
+          Description: CloudFront origin-facing
+
+  # ---------------------------------------------------------------- runtime configuration (read on every container start)
+  ImageUriParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /tensorforge/api/image-uri
+      Type: String
+      Value: !Sub
+        - "${RepositoryUri}:${ImageTag}"
+        - RepositoryUri: { "Fn::ImportValue": !Sub "${EcrStackName}-RepositoryUri" }
+
+  CorsOriginsParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /tensorforge/api/cors-origins
+      Type: String
+      Value: !If [HasCors, !Ref CorsOrigins, none] # SSM can't hold an empty string: "none" = CORS off
+
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /tensorforge/tensorforge-api
+      RetentionInDays: 30
+
+  # ---------------------------------------------------------------- instance identity
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ec2.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore" # Session Manager + Run Command
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+      Policies:
+        - PolicyName: tensorforge-runtime
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # SecureString with the AWS managed key aws/ssm: no extra kms:Decrypt grant needed.
+              - Effect: Allow
+                Action: ssm:GetParameter
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ApiKeyParameterName}"
+                  - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tensorforge/api/image-uri"
+                  - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tensorforge/api/cors-origins"
+              - Effect: Allow # Docker awslogs driver
+                Action: [logs:CreateLogStream, logs:PutLogEvents, logs:DescribeLogStreams]
+                Resource: !Sub "${ApiLogGroup.Arn}"
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref InstanceRole]
+
+  # Only holds settings the instance resource can't express. Never edit it: a new version replaces the instance.
+  InstanceLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        MetadataOptions:
+          HttpEndpoint: enabled
+          HttpTokens: required # IMDSv2 only
+          HttpPutResponseHopLimit: 1 # containers can't reach the instance role credentials
+
+  # ---------------------------------------------------------------- the host
+  ElasticIp:
+    Type: AWS::EC2::EIP
+    DependsOn: GatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags: [{ Key: Name, Value: tensorforge-api }]
+
+  ApiInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref InstanceLaunchTemplate
+        Version: !GetAtt InstanceLaunchTemplate.LatestVersionNumber
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref InstanceProfile
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds: [!Ref ApiSecurityGroup]
+      # Burstable types: "unlimited" so a long job never drops to the 20 % baseline (surplus is billed, not throttled).
+      CreditSpecification: !If [IsBurstable, { CPUCredits: unlimited }, !Ref "AWS::NoValue"]
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs: { VolumeType: gp3, VolumeSize: 30, Encrypted: true, DeleteOnTermination: true }
+      Tags: [{ Key: Name, Value: tensorforge-api }]
+      # Runs once, on first boot. Runtime settings (image, CORS, key) come from SSM on every service start,
+      # so config changes need `systemctl restart tensorforge` (scripts/restart-api.sh), not a new instance.
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euo pipefail
+          exec > >(tee -a /var/log/tensorforge-bootstrap.log) 2>&1
+          WAIT_URL='${ApiWaitHandle}'
+          signal() {
+            curl -s -X PUT -H 'Content-Type:' --data-binary \
+              "{\"Status\":\"$1\",\"Reason\":\"$2\",\"UniqueId\":\"api\",\"Data\":\"$2\"}" "$WAIT_URL" || true
+          }
+          trap 'signal FAILURE "bootstrap failed, see /var/log/tensorforge-bootstrap.log"' ERR
+
+          # 1) Network comes from the Elastic IP, associated just after launch: wait for it.
+          imds() {
+            local t
+            t=$(curl -s -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' http://169.254.169.254/latest/api/token)
+            curl -s -H "X-aws-ec2-metadata-token: $t" "http://169.254.169.254/latest/meta-data/$1"
+          }
+          for i in $(seq 1 120); do [ "$(imds public-ipv4)" = "${ElasticIp}" ] && break; sleep 5; done
+
+          # 2) Docker.
+          for i in 1 2 3; do dnf install -y docker && break; sleep 10; done
+          systemctl enable --now docker
+
+          # 3) Service config (names only; values live in SSM).
+          cat > /etc/tensorforge.env <<'EOF'
+          AWS_REGION=${AWS::Region}
+          IMAGE_PARAM=${ImageUriParameter}
+          CORS_PARAM=${CorsOriginsParameter}
+          API_KEY_PARAM=${ApiKeyParameterName}
+          LOG_GROUP=${ApiLogGroup}
+          EOF
+          chmod 600 /etc/tensorforge.env
+
+          # 4) Launcher: read config from SSM, pull, then the contract command in the foreground.
+          cat > /usr/local/bin/tensorforge-run <<'EOF'
+          #!/bin/bash
+          set -euo pipefail
+          . /etc/tensorforge.env
+          export AWS_REGION
+          param() { aws ssm get-parameter --name "$1" --with-decryption --query Parameter.Value --output text; }
+          IMAGE=$(param "$IMAGE_PARAM")
+          CORS=$(param "$CORS_PARAM")
+          install -d -m 0700 /run/tensorforge
+          umask 077
+          printf 'API_KEY=%s\n' "$(param "$API_KEY_PARAM")" > /run/tensorforge/env
+          if [ "$CORS" != "none" ]; then printf 'CORS_ORIGINS=%s\n' "$CORS" >> /run/tensorforge/env; fi
+          REGISTRY=$(echo "$IMAGE" | cut -d/ -f1)
+          aws ecr get-login-password | docker login --username AWS --password-stdin "$REGISTRY"
+          docker pull "$IMAGE"
+          docker rm -f tf-api >/dev/null 2>&1 || true
+          echo "starting $IMAGE"
+          exec docker run --name tf-api -p 8000:8000 --env-file /run/tensorforge/env -v tf-jobs:/app/data \
+            --log-driver awslogs --log-opt awslogs-region="$AWS_REGION" \
+            --log-opt awslogs-group="$LOG_GROUP" --log-opt awslogs-stream=api \
+            "$IMAGE"
+          EOF
+          chmod 755 /usr/local/bin/tensorforge-run
+
+          # 5) systemd: start on boot, restart on crash. A restart mid-job = the contract's restart case
+          #    (running job -> failed/interrupted, queued jobs survive: the tf-jobs volume is kept).
+          cat > /etc/systemd/system/tensorforge.service <<'EOF'
+          [Unit]
+          Description=TensorForge API container
+          After=docker.service network-online.target
+          Requires=docker.service
+          Wants=network-online.target
+
+          [Service]
+          Environment=HOME=/root
+          ExecStart=/usr/local/bin/tensorforge-run
+          ExecStop=/usr/bin/docker stop -t 20 tf-api
+          Restart=always
+          RestartSec=10
+          TimeoutStartSec=infinity
+          TimeoutStopSec=40
+
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+          systemctl daemon-reload
+          systemctl enable --now tensorforge.service
+
+          # 6) Tell CloudFormation once /health is 200 (model loaded), at most ~15 min.
+          for i in $(seq 1 90); do
+            if curl -sf --max-time 3 http://127.0.0.1:8000/health >/dev/null; then signal SUCCESS healthy; exit 0; fi
+            sleep 10
+          done
+          signal FAILURE "health check never passed, see: aws logs tail /tensorforge/tensorforge-api"
+
+  # Elastic IP <-> instance. If the instance is ever replaced (AMI/arch change), the association moves the same
+  # address to the new instance, so the CloudFront origin and the public URL don't change.
+  ElasticIpAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt ElasticIp.AllocationId
+      InstanceId: !Ref ApiInstance
+
+  # Stack creation waits for the first healthy container (fails the deploy instead of leaving a broken service).
+  ApiWaitHandle:
+    Type: AWS::CloudFormation::WaitConditionHandle
+
+  ApiReady:
+    Type: AWS::CloudFormation::WaitCondition
+    DependsOn: [ApiInstance, ElasticIpAssociation]
+    Properties:
+      Handle: !Ref ApiWaitHandle
+      Timeout: "1500"
+      Count: 1
+
+  # ---------------------------------------------------------------- public HTTPS front
+  ApiDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: TensorForge API - HTTPS front for the EC2 container
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: PriceClass_All
+        Origins:
+          - Id: ec2-api
+            # Public DNS name of the Elastic IP (CloudFront origins must be host names, not IPs).
+            DomainName: !If
+              - IsUsEast1
+              - !Sub
+                - "ec2-${Dashed}.compute-1.amazonaws.com"
+                - Dashed: !Join ["-", !Split [".", !Ref ElasticIp]]
+              - !Sub
+                - "ec2-${Dashed}.${AWS::Region}.compute.amazonaws.com"
+                - Dashed: !Join ["-", !Split [".", !Ref ElasticIp]]
+            CustomOriginConfig:
+              HTTPPort: 8000
+              OriginProtocolPolicy: http-only
+              OriginReadTimeout: 60 # max without a quota increase; /predict/batch(100) must stay < 30 s anyway
+              OriginKeepaliveTimeout: 60
+        DefaultCacheBehavior:
+          TargetOriginId: ec2-api
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS, PUT, PATCH, POST, DELETE]
+          CachedMethods: [GET, HEAD]
+          # Managed "CachingDisabled": nothing is cached, every request reaches the API.
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+          # Managed "AllViewerExceptHostHeader": forwards X-API-Key, Authorization, Idempotency-Key, Origin,
+          # query strings and bodies unchanged.
+          OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+          Compress: false
+
+Outputs:
+  ApiUrl:
+    Description: Public HTTPS base URL (submit this one; stable while the distribution exists)
+    Value: !Sub "https://${ApiDistribution.DomainName}"
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiUrl"
+  DistributionId:
+    Value: !Ref ApiDistribution
+  InstanceId:
+    Value: !Ref ApiInstance
+  ElasticIp:
+    Value: !Ref ElasticIp
+  ImageUri:
+    Description: Image the service runs (after the next container start)
+    Value: !GetAtt ImageUriParameter.Value
+  LogGroupName:
+    Value: !Ref ApiLogGroup
