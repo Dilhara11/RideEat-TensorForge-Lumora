@@ -1,11 +1,11 @@
-// The routing decision for one ticket: category, team, urgency, review state, confidence meter.
+// One classification: category, urgency, review state, routing panel, confidence meter, secondary issue.
 
+import type { ReactNode } from "react";
 import { Icon } from "../../components/icons";
-import { Badge, Button, Eyebrow, Note, ReviewBadge, UrgentBadge, cx } from "../../components/ui";
+import { Badge, Eyebrow, Note, ReviewBadge, UrgentBadge, cx } from "../../components/ui";
 import { fmt } from "../../lib/format";
 import { CATEGORY, REVIEW_THRESHOLD, categoryLabel } from "../../lib/tickets";
 import type { Prediction } from "../../lib/types";
-import { teamIcon } from "../routing/teams";
 
 function ConfidenceMeter({ confidence, low }: { confidence: number; low: boolean }) {
   const pct = Math.round(confidence * 100);
@@ -45,7 +45,8 @@ function ConfidenceMeter({ confidence, low }: { confidence: number; low: boolean
   );
 }
 
-export function PredictionCard({ p, ms, onSimulate }: { p: Prediction; ms?: number; onSimulate?: () => void }) {
+/** routing: the routing panel, shown right under the category. */
+export function PredictionCard({ p, ms, routing }: { p: Prediction; ms?: number; routing?: ReactNode }) {
   const review = p.needs_human_review ?? p.confidence < REVIEW_THRESHOLD;
   const secondary = p.secondary_category;
 
@@ -59,26 +60,11 @@ export function PredictionCard({ p, ms, onSimulate }: { p: Prediction; ms?: numb
         </div>
         <div className="flex flex-wrap gap-1.5">
           {p.is_urgent ? <UrgentBadge /> : <Badge icon="clock">Not urgent</Badge>}
-          {review ? <ReviewBadge /> : <Badge tone="ok" icon="checkCircle">Auto-route</Badge>}
+          {review ? <ReviewBadge /> : <Badge tone="ok" icon="checkCircle">Confident</Badge>}
         </div>
       </div>
 
-      <div className={cx("mt-5 flex items-center gap-4 rounded-xl border p-4", review ? "border-warning-fill/40 bg-warning-soft" : "border-accent/20 bg-accent-soft")}>
-        <span aria-hidden="true" className={cx("grid size-11 shrink-0 place-items-center rounded-lg", review ? "bg-warning-fill text-[#1c1405]" : "bg-accent text-on-accent")}>
-          <Icon name={teamIcon(p.team)} size={21} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <Eyebrow>{review ? "Suggested team" : "Route to"}</Eyebrow>
-          <div className="text-lg font-semibold leading-tight">{p.team}</div>
-        </div>
-        {onSimulate && (
-          <span className="hidden sm:block">
-            <Button variant="primary" size="sm" icon="play" onClick={onSimulate}>
-              Simulate routing
-            </Button>
-          </span>
-        )}
-      </div>
+      {routing}
 
       <ConfidenceMeter confidence={p.confidence} low={review} />
 
@@ -106,11 +92,6 @@ export function PredictionCard({ p, ms, onSimulate }: { p: Prediction; ms?: numb
         p.category === "spam_irrelevant" && <Note tone="info">Looks like spam or not a support request. It can be closed automatically.</Note>
       )}
 
-      {onSimulate && (
-        <Button variant="primary" icon="play" onClick={onSimulate} className="mt-1 w-full sm:hidden">
-          Simulate routing
-        </Button>
-      )}
 
       <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border pt-3 text-[13px] text-muted">
         <span className="inline-flex items-center gap-1.5">

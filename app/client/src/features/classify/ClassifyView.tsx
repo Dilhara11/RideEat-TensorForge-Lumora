@@ -1,20 +1,21 @@
 // Classify view (support agents, judges): one ticket in, routing decision out.
 
-import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Icon } from "../../components/icons";
-import { Button, Card, CardHead, EmptyState, FieldError, Kbd, Note, PanelHead, cx } from "../../components/ui";
+import { Button, Card, EmptyState, FieldError, Kbd, Note, PanelHead, cx } from "../../components/ui";
 import { ApiError, apiKey, friendlyMessage, request } from "../../lib/api";
 import { fmt, prefersReducedMotion } from "../../lib/format";
 import { CHANNELS, CHANNEL_LABEL, LIMITS, SAMPLES, validateTicket } from "../../lib/tickets";
 import type { Channel, Prediction, Ticket } from "../../lib/types";
-import { RoutingSimulator, type RoutingSimulatorHandle } from "../routing/RoutingSimulator";
+import { AutoRouteSwitch, RoutePanel } from "../routing/RoutingControls";
+import { useAutoRoute, useRouting } from "../routing/routing";
 import { CHANNEL_ICON } from "../routing/teams";
 import { PredictionCard } from "./PredictionCard";
 
 type Result =
   | { kind: "empty" }
   | { kind: "loading" }
-  | { kind: "ok"; prediction: Prediction; ms: number; ticket: Ticket; n: number }
+  | { kind: "ok"; prediction: Prediction; ms: number; n: number }
   | { kind: "error"; error: unknown };
 
 export function ClassifyView() {
@@ -23,10 +24,11 @@ export function ClassifyView() {
   const [text, setText] = useState("");
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [result, setResult] = useState<Result>({ kind: "empty" });
+  const [auto] = useAutoRoute();
+  const preds = useMemo(() => (result.kind === "ok" ? [result.prediction] : []), [result]);
+  const routing = useRouting(preds, auto);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
-  const simRef = useRef<HTMLDivElement>(null);
-  const sim = useRef<RoutingSimulatorHandle>(null);
   const runs = useRef(0);
   const inFlight = useRef<AbortController | null>(null);
   const retryAfterKey = useRef<Ticket | null>(null); // a 401 opened the key dialog: resume once a key is saved
@@ -50,7 +52,7 @@ export function ClassifyView() {
     }
     try {
       const { data, ms } = await request<Prediction>("/predict", { method: "POST", body: ticket, signal: ctrl.signal });
-      setResult({ kind: "ok", prediction: data, ms, ticket, n: ++runs.current });
+      setResult({ kind: "ok", prediction: data, ms, n: ++runs.current });
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
       retryAfterKey.current = err instanceof ApiError && err.status === 401 ? ticket : null;
@@ -70,11 +72,6 @@ export function ClassifyView() {
     [], // classify only uses refs and state setters: subscribe once
   );
 
-  const simulate = () => {
-    simRef.current?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
-    sim.current?.play();
-  };
-
   const current = (): Ticket => ({ channel, text, subject: channel === "email" ? subject : "" });
 
   const onSubmit = (e: FormEvent) => {
@@ -90,8 +87,8 @@ export function ClassifyView() {
 
   return (
     <>
-      <PanelHead eyebrow="Single ticket" title="Classify & route a ticket">
-        Paste a ticket in English, Sinhala, Tamil, Singlish or Tanglish. Get its category, destination team, urgency and confidence, then replay how it is routed.
+      <PanelHead eyebrow="Single ticket" title="Classify & route a ticket" actions={<AutoRouteSwitch />}>
+        Paste a ticket in English, Sinhala, Tamil, Singlish or Tanglish. Get its category, urgency and confidence, then route it to the right department.
       </PanelHead>
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
@@ -234,16 +231,17 @@ export function ClassifyView() {
               )}
             </Note>
           )}
-          {result.kind === "ok" && <PredictionCard key={result.n} p={result.prediction} ms={result.ms} onSimulate={simulate} />}
+          {result.kind === "ok" && (
+            <PredictionCard
+              key={result.n}
+              p={result.prediction}
+              ms={result.ms}
+              routing={<RoutePanel p={result.prediction} routed={routing.get(0)} onRoute={(team) => routing.route(0, team)} onChange={() => routing.change(0)} />}
+            />
+          )}
         </Card>
       </div>
 
-      {result.kind === "ok" && (
-        <Card ref={simRef} className="mt-6 scroll-mt-6 animate-fade-up">
-          <CardHead icon="route" title="Routing simulation" sub="A visual replay of how this ticket moves through triage. Every step comes from the prediction above." />
-          <RoutingSimulator key={result.n} ref={sim} prediction={result.prediction} ticket={result.ticket} />
-        </Card>
-      )}
     </>
   );
 }

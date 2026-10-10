@@ -89,15 +89,15 @@ Click each sample card. The result appears on the right.
 
 | # | Sample | Category → Route to | Conf. | Badges |
 |---|---|---|---|---|
-| 1 | Sinhala · Chat | Lost item → Lost & Found | 94 % | Not urgent · Safe to auto-route |
-| 2 | Tamil · Chat | Lost item → Lost & Found | 89 % | Not urgent · Safe to auto-route |
-| 3 | Singlish · Chat | Delivery delay → Delivery Operations | 94 % | Not urgent · Safe to auto-route |
-| 4 | Tanglish · Chat | Food quality → Restaurant Quality | 94 % | Not urgent · Safe to auto-route |
+| 1 | Sinhala · Chat | Lost item → Lost & Found | 94 % | Not urgent · Confident |
+| 2 | Tamil · Chat | Lost item → Lost & Found | 89 % | Not urgent · Confident |
+| 3 | Singlish · Chat | Delivery delay → Delivery Operations | 94 % | Not urgent · Confident |
+| 4 | Tanglish · Chat | Food quality → Restaurant Quality | 94 % | Not urgent · Confident |
 | 5 | English · Call transcript | Safety or conduct → Trust & Safety | 75 % | **⚡ Urgent** + red "Urgent. Handle this ticket first…" note |
-| 6 | Mixed script · Chat | Payment or refund → Payments & Refunds | 97 % | Not urgent · Safe to auto-route |
+| 6 | Mixed script · Chat | Payment or refund → Payments & Refunds | 97 % | Not urgent · Confident |
 | 7 | Tamil · Call transcript | Safety or conduct → Trust & Safety | 71 % | **⚡ Urgent** |
 | 8 | Spam · Email | Spam or irrelevant → Auto-close / Spam Filter | 89 % | Blue note "Looks like spam…" |
-| 9 | Ambiguous · shows review | Safety or conduct → Trust & Safety | 67 % | **● Needs review**, amber bar below the 70 % marker, note "Check before routing…" |
+| 9 | Ambiguous · shows review | Safety or conduct → Trust & Safety | 67 % | **Needs review**, amber bar below the 70 % marker, note "Check before routing…" |
 
 Also check:
 
@@ -166,17 +166,20 @@ Also check:
 | 6.14 | Jobs → Open a job by ID: `no-such-job` | "⚠ No job with this ID. Check it and try again." |
 | 6.15 | Jobs → open a real job ID (copy one from a card or from curl) | The job is added to the list and followed live |
 
-## 7. Routing simulation
+## 7. Routing
 
 | # | Do | ✅ Expect |
 |---|---|---|
-| 7.1 | Classify → sample 5 (English · Call transcript) → **Simulate routing** | The page scrolls to "Routing simulation". Five steps light up in turn (Intake → Classifier → Priority check → Confidence gate → Dispatch). Priority check turns red, **"Urgent: priority lane"**. The gate is green, **"Cleared to auto-route"** |
-| 7.2 | Wait for the end | Status says **"Routed to Trust & Safety on the priority lane."** On the dispatch board, **Trust & Safety** is highlighted with **Assigned** + **Priority**, the other queues are dimmed, and a secondary team (if any) has a dashed **CC · secondary** tile |
-| 7.3 | Sample 9 (Ambiguous) → **Simulate routing** | Gate is amber, **"Held for human review"**. **Human review desk** shows **Holding** and the suggested team shows **Pending review** |
-| 7.4 | Sample 8 (Spam), then simulate | Dispatch says **"Auto-closed"**. Status: "Closed automatically as spam." |
-| 7.5 | During a replay click **Skip to result**, then **Replay** | It jumps to the end, and Replay plays it again from the start |
-| 7.6 | Batch → `01_quick_batch.csv` → classify → **Simulate** on any table row | A dialog opens and plays that row's routing. **Esc**, **×** or a click outside closes it |
-| 7.7 | OS setting "reduce motion" on, then simulate | No animation: the final routed state shows at once |
+| 7.1 | Classify → sample 5 (English · Call transcript), **Auto-routing off** (default) | Under the category: **"Ready to route"**, the list shows **Trust & Safety (suggested)**, a **Route** button, and "Manual routing is on. Turn on auto-routing…" |
+| 7.2 | Pick **Ride Operations** in the list → **Route** | "Routing…" for a moment, then a green **"Routed to Ride Operations"**, "By you. Changed from the suggested Trust & Safety." |
+| 7.3 | **Change** → pick **Trust & Safety** → **Route** | "Routed to Trust & Safety", "By you." |
+| 7.4 | Turn **Auto-routing** on (switch in the page header), then classify sample 3 (Singlish) | Straight away: **"Auto-routed to …"**, "…confident, so it was sent without review." No click needed |
+| 7.5 | With auto-routing on, sample 9 (Ambiguous) | Amber **"Needs a person to route"**, "Below 70 % confidence, so a person picks the department, even with auto-routing on." |
+| 7.6 | Reload the page | The switch keeps its position |
+| 7.7 | Batch → `01_quick_batch.csv` → classify, with auto-routing on | The bar shows "Routed X of 20 · X auto · 0 by hand · Y waiting". Confident rows show ✓ team + "Auto-routed". Rows that need review have a picker + **Route** |
+| 7.8 | Route a waiting row, then tick **Awaiting routing** | The routed row shows "By you". The filter lists the rows that were still waiting |
+| 7.9 | Turn auto-routing off, then classify the file again | Every row waits for **Route** |
+| 7.10 | **Download all (CSV)** | The file has `routed_team` and `routed_by` (`auto` / `manual`, empty while waiting) columns |
 
 ## 8. Configuration failures (what an Amplify misconfiguration looks like)
 
