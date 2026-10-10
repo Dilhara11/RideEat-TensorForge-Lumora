@@ -106,6 +106,18 @@ const PATHS = {
   ),
   skip: <path d="m5 4 10 8-10 8zM19 5v14" />,
   x: <path d="M18 6 6 18M6 6l12 12" />,
+  edit: (
+    <>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </>
+  ),
+  send: (
+    <>
+      <path d="M14.5 21.7a.5.5 0 0 0 .9 0L22 3a.5.5 0 0 0-.6-.6L2.3 8.6a.5.5 0 0 0 0 .9l7.9 3.2a2 2 0 0 1 1.1 1.1z" />
+      <path d="m21.9 2.1-10.9 10.9" />
+    </>
+  ),
   chevronLeft: <path d="m15 18-6-6 6-6" />,
   chevronRight: <path d="m9 18 6-6-6-6" />,
   arrowRight: <path d="M5 12h14M12 5l7 7-7 7" />,

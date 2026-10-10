@@ -177,7 +177,7 @@ export function StatTile({ label, value, sub, icon, tone = "info" }: { label: st
 export function PanelHead({ title, eyebrow, children, actions }: { title: string; eyebrow?: string; children: ReactNode; actions?: ReactNode }) {
   return (
     <div className="mb-6 flex flex-wrap items-end gap-4">
-      <div className="mr-auto max-w-3xl">
+      <div className="mr-auto max-w-2xl">
         {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
         <h1 className="mb-1.5 text-[26px] font-semibold leading-tight tracking-tight">{title}</h1>
         <p className="text-muted">{children}</p>

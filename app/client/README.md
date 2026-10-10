@@ -65,14 +65,25 @@ CORS error in the last case.
 
 | View | For | What it does |
 |---|---|---|
-| **Classify** | Support agents, judges | One ticket → category, team, urgency, secondary issue and a confidence meter with the 70 % review threshold. One-click samples in Sinhala, Tamil, Singlish, Tanglish, mixed script and English. **Simulate routing** replays the decision step by step (intake → classifier → priority check → confidence gate → dispatch) and lands the ticket on a dispatch board of every team queue |
-| **Batch** | Team leads / managers | Drop a CSV, JSON or JSONL file. Rows are checked before sending. **≤ 100 tickets → `/predict/batch`** (instant), **101–5,000 → `/batch/jobs`** (background). Shows a summary (urgent, needs review, routing load per team), a filterable table and CSV export (original columns plus predictions). Every row has **Simulate**, which opens the routing replay for that ticket |
+| **Classify** | Support agents, judges | One ticket → category, team, urgency, secondary issue and a confidence meter with the 70 % review threshold. One-click samples in Sinhala, Tamil, Singlish, Tanglish, mixed script and English. Under the result, **Route** sends the ticket to the suggested department, or to another one picked from the list. **Change** reroutes it |
+| **Batch** | Team leads / managers | Drop a CSV, JSON or JSONL file. Rows are checked before sending. **≤ 100 tickets → `/predict/batch`** (instant), **101–5,000 → `/batch/jobs`** (background). Shows a summary (urgent, needs review, routing load per team), a filterable table and CSV export (original columns plus predictions). Every row has a **Route to** picker. A bar shows how many tickets are routed (auto / by hand / waiting), and the export adds `routed_team` and `routed_by` |
 | **Jobs** | Team leads, engineers | Background jobs started from this browser (or opened by ID): live progress (follows `Retry-After`), cancel or delete, view and download results |
 
 The sidebar (top bar on phones) shows the API's live `/health` status and the served `model_version`. Every number
-on the page comes from a real API response. The routing simulation is a visual replay of the prediction the API
-returned: each step's outcome (category, priority lane, review hold, destination team, CC for a secondary issue)
-is derived from that prediction, and nothing else is invented.
+on the page comes from a real API response.
+
+### Routing
+
+The API classifies; routing happens in the browser (the API has no routing endpoint, and routes are not stored on
+the server). The **Auto-routing** switch (Classify header and above the results table, remembered in this browser)
+sets the mode:
+
+| Mode | Confident tickets (≥ 70 %) | Tickets that need review (< 70 %) |
+|---|---|---|
+| **Off** (default) | Wait for someone to click **Route** | Wait for someone to pick a department and click **Route** |
+| **On** | Sent to the predicted team straight away (**Auto-routed**) | Held for a person, who picks the department |
+
+In both modes the department can be changed before routing (the list) or after (**Change**).
 
 ### Batch file format
 
@@ -114,7 +125,7 @@ src/features/classify/         Classify view + prediction card
 src/features/batch/            Batch view (file → validate → sync batch or async job)
 src/features/jobs/             job store (polling outside React) + Jobs view
 src/features/results/          shared results summary, per-team bars, table, export
-src/features/routing/          routing simulation (pipeline + dispatch board), row dialog, team icons
+src/features/routing/          routing mode + state (routing.ts), switch / panel / table cell, team icons
 ```
 
 Dependencies are pinned (`--save-exact`) and kept minimal: `react` and `react-dom` at runtime. Everything else
@@ -122,15 +133,15 @@ Dependencies are pinned (`--save-exact`) and kept minimal: `react` and `react-do
 
 ## UX and accessibility notes
 
-- Production console look: dark navigation, indigo accent. Colour carries meaning (indigo = action / routed,
-  red = urgent/error, amber = needs review, green = OK), and status is always shown with text and an icon, never
-  colour alone. Motion is limited to state changes: results arriving, the routing replay, job progress.
+- Production console look: dark navigation, indigo accent. Colour carries meaning (indigo = action,
+  red = urgent/error, amber = needs review, green = OK / routed), and status is always shown with text and an icon,
+  never colour alone. Motion is limited to state changes: results arriving, a ticket being routed, job progress.
 - Light and dark themes follow the OS, with a toggle. Theme colours are CSS variables mapped into Tailwind
   (`bg-surface`, `text-muted`, `bg-mark`…), so components have no `dark:` variants. Data-mark colours are validated
   per theme for contrast and colour-blind separation.
 - Keyboard: navigation is plain links (Tab / Enter), <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Enter</kbd> classifies, and
-  focus rings are visible. Results, job progress and each routing step are announced via `aria-live`.
-- Respects `prefers-reduced-motion` (the routing replay jumps straight to the result). Responsive down to 360 px (on narrow screens the result scrolls into view).
+  focus rings are visible. Results, routing and job progress are announced via `aria-live`.
+- Respects `prefers-reduced-motion`. Responsive down to 360 px (on narrow screens the result scrolls into view).
   44 px touch targets.
 - React escapes all ticket text, so ticket content can't inject markup.
 - Sinhala and Tamil rely on system fonts (`Nirmala UI` on Windows, `Sinhala/Tamil Sangam MN` on macOS, `Noto` on

@@ -2,7 +2,7 @@
    Components use token utilities (bg-surface, text-muted, bg-mark…); the tokens switch per theme, so no
    `dark:` variants are needed. Theme = OS preference unless the user picked one (html[data-theme]).
    Colour carries meaning: accent = interactive / routed, danger = urgent/error, warning = needs review, success = ok.
-   Motion is reserved for state changes (results arriving, the routing replay, progress) and honours reduced motion. */
+   Motion is reserved for state changes (results arriving, a ticket being routed, progress) and honours reduced motion. */
 @import "tailwindcss";
 /* Manual-test tickets are data, not markup: keep them out of Tailwind's class scan. */
 @source not "../test-data";
@@ -167,7 +167,6 @@
   --animate-fade-in: fade-in 200ms ease-out both;
   --animate-pop-in: pop-in 320ms var(--ease-out-soft) both;
   --animate-grow-x: grow-x 700ms var(--ease-out-soft) both;
-  --animate-ring: ring 1.4s ease-out infinite;
   --animate-stripes: stripes 1s linear infinite;
 
   @keyframes fade-up {
@@ -194,14 +193,6 @@
   @keyframes grow-x {
     from {
       transform: scaleX(0);
-    }
-  }
-  @keyframes ring {
-    0% {
-      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
-    }
-    100% {
-      box-shadow: 0 0 0 12px color-mix(in srgb, var(--accent) 0%, transparent);
     }
   }
   @keyframes stripes {
@@ -302,47 +293,4 @@
     transparent
   );
   background-size: 24px 24px;
-}
-
-/* Routing replay: connectors fill top→bottom on phones, left→right from md up; the packet travels the same way. */
-@utility route-fill {
-  transform-origin: top;
-  transform: scaleY(var(--p, 0));
-  transition: transform 650ms var(--ease-out-soft);
-  @media (width >= 48rem) {
-    transform-origin: left;
-    transform: scaleX(var(--p, 0));
-  }
-}
-@utility route-packet {
-  animation: packet-y 650ms var(--ease-out-soft) both;
-  @media (width >= 48rem) {
-    animation-name: packet-x;
-  }
-}
-@keyframes packet-y {
-  from {
-    top: 0%;
-    opacity: 1;
-  }
-  85% {
-    opacity: 1;
-  }
-  to {
-    top: 100%;
-    opacity: 0;
-  }
-}
-@keyframes packet-x {
-  from {
-    left: 0%;
-    opacity: 1;
-  }
-  85% {
-    opacity: 1;
-  }
-  to {
-    left: 100%;
-    opacity: 0;
-  }
 }

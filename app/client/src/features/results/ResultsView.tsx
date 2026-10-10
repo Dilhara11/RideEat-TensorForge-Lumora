@@ -1,4 +1,4 @@
-// Shared results view for Batch and Jobs (team leads / managers): KPI row, per-team load, filterable table, export.
+// Shared results view for Batch and Jobs (team leads / managers): KPI row, per-team load, routing, filterable table, export.
 // Every number shown is computed from the predictions actually returned. Nothing is invented.
 
 import { useId, useMemo, useState } from "react";
@@ -8,10 +8,12 @@ import { toCsv } from "../../lib/csv";
 import { download, fmt } from "../../lib/format";
 import { CHANNEL_LABEL, RESULT_COLUMNS, TEAMS, categoryLabel, flattenResult } from "../../lib/tickets";
 import type { ResultItem } from "../../lib/types";
-import { RouteDialog } from "../routing/RouteDialog";
+import { AutoRouteSwitch, RouteCell } from "../routing/RoutingControls";
+import { useAutoRoute, useRouting } from "../routing/routing";
 import { CHANNEL_ICON, teamIcon } from "../routing/teams";
 
 const PAGE = 50;
+const ROUTE_COLUMNS = ["routed_team", "routed_by"];
 
 interface Props {
   title: string;
@@ -27,8 +29,12 @@ export function ResultsView({ title, fileBase, items, processingMs, modelVersion
   const [urgentOnly, setUrgentOnly] = useState(false);
   const [reviewOnly, setReviewOnly] = useState(false);
   const [page, setPage] = useState(0);
-  const [routing, setRouting] = useState<ResultItem | null>(null);
+  const [waitingOnly, setWaitingOnly] = useState(false);
   const teamSelectId = useId();
+  const [auto] = useAutoRoute();
+  const preds = useMemo(() => items.map((i) => i.prediction), [items]);
+  const indexOf = useMemo(() => new Map(items.map((it, i) => [it, i])), [items]);
+  const routing = useRouting(preds, auto);
 
   const stats = useMemo(() => {
     const preds = items.map((i) => i.prediction);
@@ -44,10 +50,20 @@ export function ResultsView({ title, fileBase, items, processingMs, modelVersion
     };
   }, [items]);
 
+  // "Awaiting routing" lists the rows that were waiting when the box was ticked, so a row doesn't vanish the moment it is routed.
+  const [waitingSnapshot, setWaitingSnapshot] = useState<Set<number> | null>(null);
   const filtered = useMemo(
-    () => items.filter(({ prediction: p }) => (!team || p.team === team) && (!urgentOnly || p.is_urgent) && (!reviewOnly || p.needs_human_review)),
-    [items, team, urgentOnly, reviewOnly],
+    () =>
+      items.filter(
+        (it) =>
+          (!team || it.prediction.team === team) &&
+          (!urgentOnly || it.prediction.is_urgent) &&
+          (!reviewOnly || it.prediction.needs_human_review) &&
+          (!waitingOnly || !waitingSnapshot || waitingSnapshot.has(indexOf.get(it)!)),
+      ),
+    [items, team, urgentOnly, reviewOnly, waitingOnly, waitingSnapshot, indexOf],
   );
+  const { n } = stats;
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE));
   const current = Math.min(page, pages - 1);
   const slice = filtered.slice(current * PAGE, current * PAGE + PAGE);
@@ -59,13 +75,19 @@ export function ResultsView({ title, fileBase, items, processingMs, modelVersion
   };
 
   const exportCsv = (rows: ResultItem[]) => {
-    const records = rows.map(({ source, ticket, prediction }) => flattenResult(source ?? ticket, prediction));
+    const records = rows.map((it) => {
+      const r = routing.get(indexOf.get(it)!);
+      return { ...flattenResult(it.source ?? it.ticket, it.prediction), routed_team: r?.team ?? "", routed_by: r?.by ?? "" };
+    });
+    const outCols = [...RESULT_COLUMNS, ...ROUTE_COLUMNS];
     const inputCols: string[] = [];
-    for (const r of records) for (const k of Object.keys(r)) if (!inputCols.includes(k) && !RESULT_COLUMNS.includes(k)) inputCols.push(k);
-    download(`${fileBase}-classified.csv`, toCsv([...inputCols, ...RESULT_COLUMNS], records), "text/csv");
+    for (const r of records) for (const k of Object.keys(r)) if (!inputCols.includes(k) && !outCols.includes(k)) inputCols.push(k);
+    download(`${fileBase}-classified.csv`, toCsv([...inputCols, ...outCols], records), "text/csv");
   };
 
-  const { n } = stats;
+  const waitingNow = () => new Set(items.flatMap((_, i) => (routing.get(i) ? [] : [i])));
+  const pending = n - routing.routed;
+
   return (
     <section aria-label={title}>
       <div className="mb-4 flex items-center gap-2">
@@ -86,7 +108,7 @@ export function ResultsView({ title, fileBase, items, processingMs, modelVersion
 
       {/* Tickets per team: one series, one hue, value at the tip, rounded data-end, square at the baseline. */}
       <Card>
-        <CardHead icon="route" title="Routing load by team" sub="Where these tickets were routed. Click a team to filter the table below." />
+        <CardHead icon="route" title="Tickets per suggested team" sub="Where the model suggests these tickets go. Click a team to filter the table below." />
         <ul aria-label="Tickets per team" className="space-y-0.5">
           {stats.teams.map(([t, count]) => {
             const active = team === t;
@@ -123,6 +145,31 @@ export function ResultsView({ title, fileBase, items, processingMs, modelVersion
       </Card>
 
       <Card>
+        <div className="mb-5 flex flex-wrap items-center gap-4 rounded-xl border border-border bg-surface-2 p-3 sm:p-4">
+          <div className="min-w-0 flex-1">
+            <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <span className="font-semibold">
+                Routed {fmt.int(routing.routed)} of {fmt.int(n)}
+              </span>
+              <span className="text-[13px] text-muted">
+                {fmt.int(routing.auto)} auto · {fmt.int(routing.routed - routing.auto)} by hand · {fmt.int(pending)} waiting
+              </span>
+            </div>
+            <div
+              role="progressbar"
+              aria-label="Tickets routed"
+              aria-valuemin={0}
+              aria-valuemax={n}
+              aria-valuenow={routing.routed}
+              className="flex h-2 overflow-hidden rounded-full bg-accent-track"
+            >
+              <span className="h-full bg-success transition-[width] duration-500 ease-out" style={{ width: `${n ? (routing.auto / n) * 100 : 0}%` }} />
+              <span className="h-full bg-mark transition-[width] duration-500 ease-out" style={{ width: `${n ? ((routing.routed - routing.auto) / n) * 100 : 0}%` }} />
+            </div>
+          </div>
+          <AutoRouteSwitch />
+        </div>
+
         <div className="mb-3 flex flex-wrap items-end gap-3">
           <div>
             <label htmlFor={teamSelectId} className="mb-1 block text-sm font-semibold">Team</label>
@@ -141,9 +188,25 @@ export function ResultsView({ title, fileBase, items, processingMs, modelVersion
             <input type="checkbox" className="size-4.5 accent-accent" checked={reviewOnly} onChange={(e) => setFilter(() => setReviewOnly(e.target.checked))} />
             Needs review only
           </label>
+          <label className="flex min-h-11 cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              className="size-4.5 accent-accent"
+              checked={waitingOnly}
+              onChange={(e) =>
+                setFilter(() => {
+                  setWaitingOnly(e.target.checked);
+                  setWaitingSnapshot(e.target.checked ? waitingNow() : null);
+                })
+              }
+            />
+            Awaiting routing ({fmt.int(pending)})
+          </label>
           <span className="flex-1" />
-          <Button icon="download" onClick={() => exportCsv(filtered)}>Filtered CSV</Button>
-          <Button variant="primary" icon="download" onClick={() => exportCsv(items)}>Download all (CSV)</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button icon="download" onClick={() => exportCsv(filtered)}>Filtered CSV</Button>
+            <Button variant="primary" icon="download" onClick={() => exportCsv(items)}>Download all (CSV)</Button>
+          </div>
         </div>
 
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -151,14 +214,14 @@ export function ResultsView({ title, fileBase, items, processingMs, modelVersion
             <caption className="sr-only">Classification results for {title}</caption>
             <thead>
               <tr>
-                {["Ticket", "Channel", "Text", "Category", "Team", "Secondary", "Urgent", "Confidence", "Review", "Routing"].map((c) => (
+                {["Ticket", "Channel", "Text", "Category", "Suggested", "Secondary", "Urgent", "Confidence", "Review", "Route to"].map((c) => (
                   <th
                     key={c}
                     scope="col"
                     className={cx(
                       "sticky top-0 whitespace-nowrap border-b border-border bg-surface-2 px-3 py-2.5 text-left text-[11.5px] font-semibold uppercase tracking-[0.06em] text-muted",
                       c === "Confidence" && "text-right",
-                      c === "Routing" && "right-0 z-[1] shadow-[-8px_0_12px_-10px_rgb(0_0_0/0.25)]",
+                      c === "Route to" && "right-0 z-[1] shadow-[-8px_0_12px_-10px_rgb(0_0_0/0.25)]",
                     )}
                   >
                     {c}
@@ -174,6 +237,7 @@ export function ResultsView({ title, fileBase, items, processingMs, modelVersion
               )}
               {slice.map((item, i) => {
                 const { row, ticket, prediction: p } = item;
+                const idx = indexOf.get(item)!;
                 return (
                 <tr key={`${p.ticket_id ?? row ?? i}`} className="border-b border-border align-top transition-colors last:border-b-0 hover:bg-surface-2">
                   <td className="whitespace-nowrap px-3 py-2 font-mono text-[13px]">{p.ticket_id ?? (row ? `row ${row}` : "–")}</td>
@@ -208,9 +272,13 @@ export function ResultsView({ title, fileBase, items, processingMs, modelVersion
                   <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{fmt.pct(p.confidence)}</td>
                   <td className="px-3 py-2">{p.needs_human_review ? <ReviewBadge short /> : <span className="text-muted">–</span>}</td>
                   <td className="sticky right-0 bg-surface px-3 py-1.5 shadow-[-8px_0_12px_-10px_rgb(0_0_0/0.25)]">
-                    <Button size="sm" variant="ghost" icon="play" onClick={() => setRouting(item)} aria-label={`Simulate routing for ${p.ticket_id ?? (row ? `row ${row}` : "this ticket")}`}>
-                      Simulate
-                    </Button>
+                    <RouteCell
+                      p={p}
+                      routed={routing.get(idx)}
+                      ticketName={p.ticket_id ?? (row ? `row ${row}` : "this ticket")}
+                      onRoute={(t) => routing.route(idx, t)}
+                      onChange={() => routing.change(idx)}
+                    />
                   </td>
                 </tr>
                 );
@@ -232,7 +300,6 @@ export function ResultsView({ title, fileBase, items, processingMs, modelVersion
           </div>
         </div>
       </Card>
-      <RouteDialog item={routing} onClose={() => setRouting(null)} />
     </section>
   );
 }

@@ -62,15 +62,15 @@ function HealthStatus({ health, compact = false }: { health: HealthState; compac
   );
 }
 
-function Brand({ sub = true }: { sub?: boolean }) {
+function Brand() {
   return (
     <div className="flex items-center gap-3">
       <span aria-hidden="true" className="grid size-9 place-items-center rounded-[10px] bg-brand text-white shadow-[0_4px_14px_-4px_var(--accent)]">
         <Icon name="route" size={18} />
       </span>
       <div className="leading-tight">
-        <span className="block font-semibold tracking-tight">TensorForge</span>
-        {sub && <span className="block text-[12px] text-nav-muted">Ticket routing console</span>}
+        <span className="block font-semibold tracking-tight">RideEat</span>
+        <span className="block text-[12px] text-nav-muted">Ticket Classifier</span>
       </div>
     </div>
   );
@@ -182,7 +182,7 @@ export default function App() {
       {/* Phones / tablets: top bar */}
       <header className="sticky top-0 z-20 border-b border-nav-border bg-nav-bg text-nav-text lg:hidden">
         <div className="flex items-center gap-2 px-4 pb-2 pt-3">
-          <Brand sub={false} />
+          <Brand />
           <span className="flex-1" />
           <HealthStatus health={health} compact />
           <button
