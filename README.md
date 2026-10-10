@@ -17,8 +17,8 @@ English · සිංහල · தமிழ் · Singlish · Tanglish · mixed s
 
 [**Live demo**](https://main.d3tyrhj5r7v7ce.amplifyapp.com) ·
 [**Hosted API**](https://d1evihbt41imfo.cloudfront.net/health) ·
-[Video](#1-competition-deliverables) ·
-[Report](#1-competition-deliverables) ·
+[Video](https://youtu.be/7Dxha8B7KT0?si=ZbnHFwynN_fL96ob) ·
+[Report](https://docs.google.com/document/d/1yvMsbYpRO08vM6SXHVKfMRWjojmpfVte4IELYao64V8/edit?usp=sharing) ·
 [Test it locally](#2-test-it-locally)
 
 </div>
@@ -63,13 +63,13 @@ runtime**. A separate React web client is the demo front end.
 
 Mapped to *TensorForge 2.0 Phase 2 Guidelines*, 5.
 
-| # | Deliverable | Where to find it | Status |
-|---|---|---|---|
-| 1 | **End-to-end solution** with a live front end |  **<https://main.d3tyrhj5r7v7ce.amplifyapp.com>** | ✅ Live |
-| 2 | **Hosted, authenticated batch-inference endpoint** that follows the API spec exactly | **<https://d1evihbt41imfo.cloudfront.net>**: OpenAPI v2.1.0. `/health` is public, every other endpoint needs the team key | ✅ Live |
-| 3 | **GitHub repository**, runnable and testable locally, with a single `docker run`, offline at runtime | This repo. `docker run -p 8000:8000 -e API_KEY=<key> tensorforge-api`. See [2](#2-test-it-locally) | ✅ |
-| 4 | **Video** (15 min, YouTube unlisted): solution, architecture, evaluation | **TODO: add the YouTube link** | ⏳ |
-| 5 | **Report** (max 5 pages): design decisions, evaluation scores, findings | **TODO: add the report link** | ⏳ |
+| # | Deliverable | Where to find it | 
+|---|---|---|
+| 1 | **End-to-end solution** with a live front end |  **<https://main.d3tyrhj5r7v7ce.amplifyapp.com>** |
+| 2 | **Hosted, authenticated batch-inference endpoint** that follows the API spec exactly | **<https://d1evihbt41imfo.cloudfront.net>**: OpenAPI v2.1.0. `/health` is public, every other endpoint needs the team key |
+| 3 | **GitHub repository**, runnable and testable locally, with a single `docker run`, offline at runtime | This repo. `docker run -p 8000:8000 -e API_KEY=<key> tensorforge-api`. See [2](#2-test-it-locally) |
+| 4 | **Video** (15 min, YouTube unlisted): solution, architecture, evaluation | **<https://youtu.be/7Dxha8B7KT0?si=ZbnHFwynN_fL96ob>** |
+| 5 | **Report** (max 5 pages): design decisions, evaluation scores, findings | **<hhttps://docs.google.com/document/d/1yvMsbYpRO08vM6SXHVKfMRWjojmpfVte4IELYao64V8/edit?usp=sharing>** |
 
 
 ---
